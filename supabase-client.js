@@ -1,0 +1,438 @@
+// This file handles all interactions with the BorderX backend API
+
+// Base URL for the BorderX API
+const API_BASE_URL = 'http://localhost:5000/api';
+
+/**
+ * BorderXClient class for handling authentication and data operations
+ */
+class BorderXClient {
+  constructor() {
+    this.authToken = null;
+    this.userInfo = null;
+    
+    // Load auth data from storage
+    chrome.storage.local.get(['authToken', 'userInfo'], (result) => {
+      if (result.authToken) {
+        this.authToken = result.authToken;
+        this.userInfo = result.userInfo;
+        console.log('Auth token loaded from storage');
+      } else {
+        console.log('No auth token found in storage');
+      }
+    });
+  }
+  
+  /**
+   * Login with email and password
+   * @param {string} email - User's email
+   * @param {string} password - User's password
+   * @returns {Promise} - Promise with user data
+   */
+  async loginWithEmail(email, password) {
+    try {
+      console.log(`Sending login request to ${API_BASE_URL}/auth/login`);
+      
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+      
+      console.log('Login response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Login error data:', errorData);
+        throw new Error(errorData.error || 'Login failed');
+      }
+      
+      const data = await response.json();
+      console.log('Login successful, received data:', data);
+      
+      // Store auth token and user info
+      this.authToken = data.token;
+      this.userInfo = data.user;
+      
+      // Save to Chrome storage
+      chrome.storage.local.set({
+        authToken: this.authToken,
+        userInfo: this.userInfo
+      });
+      
+      return data;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Fetch DS-160 form data by application ID
+   * @param {string} applicationId - The DS-160 application ID
+   * @returns {Promise} - Promise with client data
+   */
+  async fetchFormData(applicationId) {
+    try {
+      if (!this.authToken) {
+        throw new Error('Not authenticated');
+      }
+      
+      console.log(`Fetching form data for application ID: ${applicationId}`);
+      
+      // Validate that applicationId is not empty
+      if (!applicationId) {
+        throw new Error('Application ID cannot be empty');
+      }
+      
+      // Use the endpoint that searches by application_id field
+      console.log(`API URL: ${API_BASE_URL}/ds160/client-data/by-application-id/${applicationId}`);
+      console.log(`Auth token: ${this.authToken.substring(0, 10)}...`);
+      
+      const response = await fetch(`${API_BASE_URL}/ds160/client-data/by-application-id/${applicationId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.error('Error response:', responseText);
+        
+        try {
+          // Try to parse as JSON if possible
+          const errorData = JSON.parse(responseText);
+          throw new Error(errorData.error || 'Failed to fetch form data');
+        } catch (parseError) {
+          // If not JSON, throw with the text
+          if (response.status === 500) {
+            throw new Error('Server error: The application ID may be invalid or the form might not exist.');
+          } else if (response.status === 404) {
+            throw new Error('Form not found: Please check the application ID and try again.');
+          } else {
+            throw new Error(`Server returned ${response.status}: ${responseText.substring(0, 100)}...`);
+          }
+        }
+      }
+      
+      const responseText = await response.text();
+      console.log('Response text (first 100 chars):', responseText.substring(0, 100));
+      
+      try {
+        const data = JSON.parse(responseText);
+        console.log('Parsed data:', data);
+        return this.formatFormData(data);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        throw new Error('Invalid JSON response from server');
+      }
+    } catch (error) {
+      console.error('Error fetching form data:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get all DS-160 forms for the current user
+   */
+  async getUserForms() {
+    try {
+      if (!this.authToken) {
+        throw new Error('Not authenticated');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/ds160/form`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch user forms');
+      }
+      
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching user forms:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Format form data for the DS-160 form
+   * @param {Object} data - Raw form data from the API
+   * @returns {Object} - Formatted form data
+   */
+  formatFormData(data) {
+    // Extract the form_data from the response
+    // The data might be nested in different ways depending on the API response
+    const formData = data.form_data || data;
+    
+    // Get section data from the structure used in the Non-immigration Website
+    const personalInfo = formData.personal_info || {};
+    const contactInfo = formData.contact_info || {};
+    const passportInfo = formData.passport_info || {};
+    const travelInfo = formData.travel_info || {};
+    const usContactInfo = formData.us_contact_info || {};
+    const familyInfo = formData.family_info || {};
+    const workEducationInfo = formData.work_education_info || {};
+    const securityInfo = formData.security_background_info || {};
+    
+    // Store the application ID if available
+    const applicationId = data.application_id || formData.application_id;
+    
+    // Format the data according to the DS-160 form fields
+    return {
+      formId: data.client_id || data.id,
+      applicationId: applicationId,
+      personalInfo: {
+        lastName: personalInfo.surname || personalInfo.last_name,
+        firstName: personalInfo.given_name || personalInfo.first_name,
+        fullNameNative: personalInfo.full_name_native,
+        dateOfBirth: this.formatDate(personalInfo.date_of_birth),
+        gender: personalInfo.gender,
+        maritalStatus: personalInfo.marital_status,
+        birthCity: personalInfo.birth_city,
+        birthCountry: personalInfo.birth_country,
+        nationality: personalInfo.nationality
+      },
+      contactInfo: {
+        streetAddress1: contactInfo.street_address_1 || contactInfo.address_line_1,
+        streetAddress2: contactInfo.street_address_2 || contactInfo.address_line_2,
+        city: contactInfo.city,
+        state: contactInfo.state || contactInfo.province,
+        postalCode: contactInfo.postal_code || contactInfo.zip_code,
+        country: contactInfo.country,
+        phone: contactInfo.phone_number,
+        email: contactInfo.email
+      },
+      passportInfo: {
+        passportNumber: passportInfo.passport_number,
+        issuingCountry: passportInfo.issuing_country,
+        issueDate: this.formatDate(passportInfo.issue_date),
+        expirationDate: this.formatDate(passportInfo.expiration_date)
+      },
+      travelInfo: {
+        purposeOfTrip: travelInfo.purpose_of_trip,
+        intendedArrivalDate: this.formatDate(travelInfo.arrival_date),
+        intendedDepartureDate: this.formatDate(travelInfo.departure_date),
+        previouslyVisitedUS: travelInfo.previously_visited_us === true || travelInfo.previously_visited_us === 'YES',
+        usContactName: usContactInfo.name || travelInfo.us_contact_name,
+        usContactAddress: usContactInfo.address || travelInfo.us_contact_address,
+        usContactPhone: usContactInfo.phone || travelInfo.us_contact_phone
+      },
+      educationInfo: this.formatEducationInfo(workEducationInfo.education_history),
+      workInfo: this.formatWorkInfo(workEducationInfo.work_history),
+      familyInfo: {
+        spouseFirstName: familyInfo.spouse_first_name,
+        spouseLastName: familyInfo.spouse_last_name,
+        spouseDateOfBirth: this.formatDate(familyInfo.spouse_date_of_birth),
+        spouseCountryOfBirth: familyInfo.spouse_country_of_birth
+      },
+      securityInfo: {
+        criminalRecord: securityInfo.criminal_record === true || securityInfo.criminal_record === 'YES',
+        drugOffenses: securityInfo.drug_offenses === true || securityInfo.drug_offenses === 'YES',
+        terroristActivities: securityInfo.terrorist_activities === true || securityInfo.terrorist_activities === 'YES'
+      }
+    };
+  }
+  
+  /**
+   * Format date from various formats to MM/DD/YYYY
+   * @param {string} date - Date string in various formats
+   * @returns {string} - Formatted date string
+   */
+  formatDate(date) {
+    if (!date) return '';
+    
+    // Handle ISO format (YYYY-MM-DD)
+    if (typeof date === 'string' && date.includes('-')) {
+      const parts = date.split('-');
+      if (parts.length === 3) {
+        return `${parts[1]}/${parts[2]}/${parts[0]}`; // MM/DD/YYYY
+      }
+    }
+    
+    // Handle object format with day, month, year properties
+    if (typeof date === 'object' && date !== null) {
+      const { day, month, year } = date;
+      if (day && month && year) {
+        return `${month}/${day}/${year}`;
+      }
+    }
+    
+    return date;
+  }
+  
+  /**
+   * Format education history data
+   */
+  formatEducationInfo(educationHistory) {
+    if (!educationHistory || !Array.isArray(educationHistory) || educationHistory.length === 0) {
+      return {};
+    }
+    
+    // Use the most recent education entry
+    const mostRecent = educationHistory[0];
+    
+    return {
+      schoolName: mostRecent.school_name || mostRecent.institution_name,
+      schoolAddress: mostRecent.school_address || mostRecent.address,
+      schoolCity: mostRecent.school_city || mostRecent.city,
+      schoolState: mostRecent.school_state || mostRecent.state || mostRecent.province,
+      schoolCountry: mostRecent.school_country || mostRecent.country,
+      degree: mostRecent.degree,
+      fieldOfStudy: mostRecent.field_of_study || mostRecent.course_of_study,
+      attendedFrom: this.formatEducationDate(mostRecent.attended_from_month, mostRecent.attended_from_year),
+      attendedTo: this.formatEducationDate(mostRecent.attended_to_month, mostRecent.attended_to_year)
+    };
+  }
+  
+  /**
+   * Format work history data
+   */
+  formatWorkInfo(workHistory) {
+    if (!workHistory || !Array.isArray(workHistory) || workHistory.length === 0) {
+      return {};
+    }
+    
+    // Use the most recent work entry
+    const mostRecent = workHistory[0];
+    
+    return {
+      employerName: mostRecent.employer_name || mostRecent.company_name,
+      employerAddress: mostRecent.employer_address || mostRecent.address,
+      employerCity: mostRecent.employer_city || mostRecent.city,
+      employerState: mostRecent.employer_state || mostRecent.state || mostRecent.province,
+      employerCountry: mostRecent.employer_country || mostRecent.country,
+      jobTitle: mostRecent.job_title || mostRecent.position,
+      description: mostRecent.description || mostRecent.job_description,
+      employedFrom: this.formatWorkDate(mostRecent.employed_from_month, mostRecent.employed_from_year),
+      employedTo: this.formatWorkDate(mostRecent.employed_to_month, mostRecent.employed_to_year)
+    };
+  }
+  
+  /**
+   * Format education date
+   */
+  formatEducationDate(month, year) {
+    if (!month || !year) return '';
+    return `${month}/${year}`;
+  }
+  
+  /**
+   * Format work date
+   */
+  formatWorkDate(month, year) {
+    if (!month || !year) return '';
+    return `${month}/${year}`;
+  }
+  
+  /**
+   * Log form fill event
+   */
+  async logFormFillEvent(formId, sectionName, success, details) {
+    try {
+      if (!this.authToken) {
+        console.warn('Not authenticated, skipping event logging');
+        return;
+      }
+      
+      await fetch(`${API_BASE_URL}/ds160/event`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          form_id: formId,
+          event_type: 'form_fill',
+          section: sectionName,
+          success,
+          details
+        })
+      });
+    } catch (error) {
+      console.error('Error logging form fill event:', error);
+      // Non-critical error, don't throw
+    }
+  }
+  
+  /**
+   * Update the application ID for a DS-160 form
+   * @param {string} formId - The internal form ID
+   * @param {string} applicationId - The official DS-160 application ID
+   * @returns {Promise} - Promise with updated form data
+   */
+  async updateApplicationId(formId, applicationId) {
+    try {
+      if (!this.authToken) {
+        throw new Error('Not authenticated');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/ds160/form/${formId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ application_id: applicationId })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update application ID');
+      }
+      
+      // Log the event
+      this.logFormEvent(formId, 'application_id_updated', { application_id: applicationId });
+      
+      return response.json();
+    } catch (error) {
+      console.error('Error updating application ID:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Log a form event
+   * @param {string} formId - The form ID
+   * @param {string} eventType - The type of event
+   * @param {Object} eventData - Additional event data
+   */
+  async logFormEvent(formId, eventType, eventData = {}) {
+    try {
+      if (!this.authToken) {
+        throw new Error('Not authenticated');
+      }
+      
+      await fetch(`${API_BASE_URL}/ds160/events`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          client_id: formId,
+          event_type: eventType,
+          event_data: eventData
+        })
+      });
+    } catch (error) {
+      console.error('Error logging form event:', error);
+      // Don't throw the error to avoid disrupting the main flow
+    }
+  }
+}
+
+// Create and export a singleton instance
+window.borderXClient = new BorderXClient();

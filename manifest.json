@@ -1,0 +1,32 @@
+{
+    "manifest_version": 3,
+    "name": "DS-160 Autofill Helper",
+    "version": "1.0",
+    "description": "Automatically fills DS-160 form fields with client data",
+    "permissions": [
+      "storage",
+      "activeTab",
+      "scripting"
+    ],
+    "host_permissions": [
+      "https://ceac.state.gov/*",
+      "http://localhost:5000/*"
+    ],
+    "action": {
+      "default_popup": "popup.html",
+      "default_icon": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+      }
+    },
+    "background": {
+        "service_worker": "background.js"
+      },
+    "content_scripts": [
+      {
+        "matches": ["https://ceac.state.gov/*"],
+        "js": ["content.js"]
+      }
+    ]
+  }

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DS-160 Autofill</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    input {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 10px;
+      background-color: #0078d4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #006abc;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      display: none;
+    }
+    .success {
+      background-color: #dff0d8;
+      color: #3c763d;
+      display: block;
+    }
+    .error {
+      background-color: #f2dede;
+      color: #a94442;
+      display: block;
+    }
+    .info {
+      background-color: #d9edf7;
+      color: #31708f;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+    <div class="container" id="loginContainer">
+      <h2>DS-160 Autofill Helper</h2>
+      
+      <div class="input-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" placeholder="Enter your email">
+      </div>
+      
+      <div class="input-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" placeholder="Enter your password">
+      </div>
+      
+      <button id="loginBtn">Login</button>
+      <div id="loginStatus" class="status"></div>
+    </div>
+    
+    <div class="container" id="mainContainer" style="display: none;">
+      <h2>DS-160 Autofill Helper</h2>
+      
+      <div class="input-group">
+        <label for="formId" class="form-label">Application ID</label>
+        <input type="text" id="formId" placeholder="Enter your DS-160 application ID">
+      </div>
+      
+      <button id="loadDataBtn">Load My Data</button>
+      <button id="fillFormBtn">Fill DS-160 Form</button>
+      <button id="logoutBtn">Logout</button>
+      
+      <div id="statusMessage" class="status"></div>
+    </div>
+    
+    <!-- Load scripts -->
+    <script src="supabase-client.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
