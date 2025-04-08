@@ -177,75 +177,108 @@ class BorderXClient {
     // The data might be nested in different ways depending on the API response
     const formData = data.form_data || data;
     
-    // Get section data from the structure used in the Non-immigration Website
-    const personalInfo = formData.personal_info || {};
-    const contactInfo = formData.contact_info || {};
-    const passportInfo = formData.passport_info || {};
-    const travelInfo = formData.travel_info || {};
-    const usContactInfo = formData.us_contact_info || {};
-    const familyInfo = formData.family_info || {};
-    const workEducationInfo = formData.work_education_info || {};
-    const securityInfo = formData.security_background_info || {};
+    console.log('Raw form data structure:', Object.keys(formData));
+
+    // // Get section data from the structure used in the Non-immigration Website
+    // const personalInfo = formData.personal_info || {};
+    // const contactInfo = formData.contact_info || {};
+    // const passportInfo = formData.passport_info || {};
+    // const travelInfo = formData.travel_info || {};
+    // const usContactInfo = formData.us_contact_info || {};
+    // const familyInfo = formData.family_info || {};
+    // const workEducationInfo = formData.work_education_info || {};
+    // const securityInfo = formData.security_background_info || {};
     
-    // Store the application ID if available
-    const applicationId = data.application_id || formData.application_id;
+    // // Store the application ID if available
+    // const applicationId = data.application_id || formData.application_id;
     
     // Format the data according to the DS-160 form fields
     return {
-      formId: data.client_id || data.id,
-      applicationId: applicationId,
-      personalInfo: {
-        lastName: personalInfo.surname || personalInfo.last_name,
-        firstName: personalInfo.given_name || personalInfo.first_name,
-        fullNameNative: personalInfo.full_name_native,
-        dateOfBirth: this.formatDate(personalInfo.date_of_birth),
-        gender: personalInfo.gender,
-        maritalStatus: personalInfo.marital_status,
-        birthCity: personalInfo.birth_city,
-        birthCountry: personalInfo.birth_country,
-        nationality: personalInfo.nationality
-      },
-      contactInfo: {
-        streetAddress1: contactInfo.street_address_1 || contactInfo.address_line_1,
-        streetAddress2: contactInfo.street_address_2 || contactInfo.address_line_2,
-        city: contactInfo.city,
-        state: contactInfo.state || contactInfo.province,
-        postalCode: contactInfo.postal_code || contactInfo.zip_code,
-        country: contactInfo.country,
-        phone: contactInfo.phone_number,
-        email: contactInfo.email
-      },
-      passportInfo: {
-        passportNumber: passportInfo.passport_number,
-        issuingCountry: passportInfo.issuing_country,
-        issueDate: this.formatDate(passportInfo.issue_date),
-        expirationDate: this.formatDate(passportInfo.expiration_date)
-      },
-      travelInfo: {
-        purposeOfTrip: travelInfo.purpose_of_trip,
-        intendedArrivalDate: this.formatDate(travelInfo.arrival_date),
-        intendedDepartureDate: this.formatDate(travelInfo.departure_date),
-        previouslyVisitedUS: travelInfo.previously_visited_us === true || travelInfo.previously_visited_us === 'YES',
-        usContactName: usContactInfo.name || travelInfo.us_contact_name,
-        usContactAddress: usContactInfo.address || travelInfo.us_contact_address,
-        usContactPhone: usContactInfo.phone || travelInfo.us_contact_phone
-      },
-      educationInfo: this.formatEducationInfo(workEducationInfo.education_history),
-      workInfo: this.formatWorkInfo(workEducationInfo.work_history),
-      familyInfo: {
-        spouseFirstName: familyInfo.spouse_first_name,
-        spouseLastName: familyInfo.spouse_last_name,
-        spouseDateOfBirth: this.formatDate(familyInfo.spouse_date_of_birth),
-        spouseCountryOfBirth: familyInfo.spouse_country_of_birth
-      },
-      securityInfo: {
-        criminalRecord: securityInfo.criminal_record === true || securityInfo.criminal_record === 'YES',
-        drugOffenses: securityInfo.drug_offenses === true || securityInfo.drug_offenses === 'YES',
-        terroristActivities: securityInfo.terrorist_activities === true || securityInfo.terrorist_activities === 'YES'
+        formId: data.client_id || data.id,
+        applicationId: data.application_id || formData.application_id,
+        
+        // Personal Information section
+        personalInfo: {
+          surname: formData.surname,
+          givenName: formData.givenName,
+          fullNameNative_na: formData.fullNameNative_na,
+          hasOtherNames: formData.hasOtherNames,
+          hasTelecode: formData.hasTelecode,
+          gender: formData.gender,
+          maritalStatus: formData.maritalStatus,
+          dateOfBirth: formData.dateOfBirth,
+          dobDay: formData.dobDay,
+          dobMonth: formData.dobMonth,
+          dobYear: formData.dobYear,
+          birthPlace: formData.birthPlace,
+          birthState_na: formData.birthState_na,
+          birthCountry: formData.birthCountry,
+          nationality: formData.nationality
+        },
+        
+        // Contact Information section
+        contactInfo: {
+          streetAddress1: formData.homeAddressLine1 || formData.streetAddress1,
+          city: formData.homeCity || formData.city,
+          state: formData.homeState || formData.state,
+          postalCode: formData.homePostalCode || formData.zipCode,
+          country: formData.homeCountry,
+          phone: formData.primaryPhone,
+          email: formData.emailAddress
+        },
+        
+        // Passport Information section
+        passportInfo: {
+          passportNumber: formData.passportNumber,
+          issuingCountry: formData.passportIssuedCountry,
+          issueDate: this.formatDate(`${formData.passportIssuedYear}-${this.monthToNumber(formData.passportIssuedMonth)}-${formData.passportIssuedDay}`),
+          expirationDate: this.formatDate(`${formData.passportExpirationYear}-${this.monthToNumber(formData.passportExpirationMonth)}-${formData.passportExpirationDay}`)
+        },
+        
+        // Travel Information section
+        travelInfo: {
+          purposeOfTrip: formData.specificPurpose,
+          intendedArrivalDate: this.formatDate(`${formData.arrivalYear}-${this.monthToNumber(formData.arrivalMonth)}-${formData.arrivalDay}`),
+          intendedDepartureDate: null, // Not present in the data
+          previouslyVisitedUS: formData.everBeenInUS === "Y",
+          usContactName: `${formData.usPocGivenName} ${formData.usPocSurname}`,
+          usContactAddress: formData.usPocAddressLine1,
+          usContactPhone: null // Not present in the data
+        },
+        
+        // Family Information section
+        familyInfo: {
+          fatherDateOfBirth: this.formatDate(`${formData.fatherDobYear}-${this.monthToNumber(formData.fatherDobMonth)}-${formData.fatherDobDay}`),
+          motherDateOfBirth: this.formatDate(`${formData.motherDobYear}-${this.monthToNumber(formData.motherDobMonth)}-${formData.motherDobDay}`),
+          hasOtherRelativesInUs: formData.hasOtherRelativesInUs === "Y"
+        },
+        
+        // Security Information section
+        securityInfo: {
+          criminalRecord: formData.previouslyDenied || false,
+          drugOffenses: false, // Not present in the data
+          terroristActivities: false // Not present in the data
+        }
+      };
+    }
+    monthToNumber(monthAbbr) {
+        const months = {
+          'JAN': '01',
+          'FEB': '02',
+          'MAR': '03',
+          'APR': '04',
+          'MAY': '05',
+          'JUN': '06',
+          'JUL': '07',
+          'AUG': '08',
+          'SEP': '09',
+          'OCT': '10',
+          'NOV': '11',
+          'DEC': '12'
+        };
+        
+        return months[monthAbbr] || '01';
       }
-    };
-  }
-  
   /**
    * Format date from various formats to MM/DD/YYYY
    * @param {string} date - Date string in various formats

@@ -152,11 +152,30 @@ document.addEventListener('DOMContentLoaded', function() {
       // Fetch form data from the API
       window.borderXClient.fetchFormData(formId)
         .then(formData => {
-          console.log('Form data loaded:', formData);
+          console.log('Form data loaded successfully!');
+          console.log('Form data structure:', Object.keys(formData));
+          
+          // Check if personalInfo exists and has data
+          if (formData.personalInfo) {
+            console.log('Personal info fields:', Object.keys(formData.personalInfo));
+            console.log('Sample personal info values:', {
+              surname: formData.personalInfo.surname,
+              givenName: formData.personalInfo.givenName,
+              gender: formData.personalInfo.gender
+            });
+          } else {
+            console.warn('No personalInfo section found in the data!');
+          }
           
           // Store the form data in Chrome storage
           chrome.storage.local.set({ currentFormData: formData }, function() {
+            console.log('Form data saved to Chrome storage');
             showStatus('Form data loaded successfully!', 'success');
+            
+            // Verify what was stored
+            chrome.storage.local.get('currentFormData', function(result) {
+              console.log('Verified data in storage:', Object.keys(result.currentFormData));
+            });
           });
         })
         .catch(error => {
