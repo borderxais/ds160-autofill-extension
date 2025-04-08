@@ -375,81 +375,120 @@ function getFieldMappings(section) {
   const mappings = {
     personalInfo: [
       {
-        dbPath: 'personalInfo.lastName',
-        selector: { type: 'id', value: 'surname' },
+        dbPath: 'personalInfo.surname',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SURNAME' },
         fallbackSelectors: [
-          { type: 'name', value: 'surname' },
-          { type: 'xpath', value: '//label[contains(text(), "Surname")]/following-sibling::input' },
-          { type: 'xpath', value: '//label[contains(text(), "Last Name")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_SURNAME' },
+          { type: 'xpath', value: '//label[contains(text(), "Surnames")]/following-sibling::input' }
         ],
         fieldType: 'text'
       },
       {
-        dbPath: 'personalInfo.firstName',
-        selector: { type: 'id', value: 'given-name' },
+        dbPath: 'personalInfo.givenName',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_GIVEN_NAME' },
         fallbackSelectors: [
-          { type: 'name', value: 'givenName' },
-          { type: 'xpath', value: '//label[contains(text(), "Given Name")]/following-sibling::input' },
-          { type: 'xpath', value: '//label[contains(text(), "First Name")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_GIVEN_NAME' },
+          { type: 'xpath', value: '//label[contains(text(), "Given Names")]/following-sibling::input' }
         ],
         fieldType: 'text'
       },
       {
-        dbPath: 'personalInfo.fullNameNative',
-        selector: { type: 'id', value: 'full-name-native-alphabet' },
+        dbPath: 'personalInfo.fullNameNative_na',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexAPP_FULL_NAME_NATIVE_NA' },
         fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Native Alphabet")]/following-sibling::input' }
+          { type: 'xpath', value: '//label[contains(text(), "Does Not Apply/Technology Not Available")]/preceding-sibling::input[@type="checkbox"]' }
         ],
-        fieldType: 'text'
+        fieldType: 'checkbox'
       },
       {
-        dbPath: 'personalInfo.dateOfBirth',
-        selector: { type: 'id', value: 'date-of-birth' },
+        dbPath: 'personalInfo.hasOtherNames',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_0' },
         fallbackSelectors: [
-          { type: 'name', value: 'dateOfBirth' },
-          { type: 'xpath', value: '//label[contains(text(), "Date of Birth")]/following-sibling::input' }
+          { type: 'xpath', value: '//label[contains(text(), "Yes")]/preceding-sibling::input[@type="radio"]' }
         ],
-        fieldType: 'date'
+        fieldType: 'radio',
+        valueMap: { 'Y': true, 'N': false }
+      },
+      {
+        dbPath: 'personalInfo.hasTelecode',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTelecodeQuestion_0' },
+        fallbackSelectors: [
+          { type: 'xpath', value: '//label[contains(text(), "telecode")]/following-sibling::input[@type="radio"]' }
+        ],
+        fieldType: 'radio',
+        valueMap: { 'Y': true, 'N': false }
       },
       {
         dbPath: 'personalInfo.gender',
-        selector: { type: 'name', value: 'gender' },
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_GENDER' },
         fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Gender")]/following-sibling::input[@type="radio"]' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_GENDER' },
+          { type: 'xpath', value: '//label[contains(text(), "Sex")]/following-sibling::select' }
         ],
-        fieldType: 'radio',
-        selectValue: (value) => value.toUpperCase() // 'male' -> 'MALE'
+        fieldType: 'select'
       },
       {
         dbPath: 'personalInfo.maritalStatus',
-        selector: { type: 'id', value: 'marital-status' },
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_MARITAL_STATUS' },
         fallbackSelectors: [
-          { type: 'name', value: 'maritalStatus' },
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_MARITAL_STATUS' },
           { type: 'xpath', value: '//label[contains(text(), "Marital Status")]/following-sibling::select' }
         ],
         fieldType: 'select'
       },
       {
-        dbPath: 'personalInfo.birthCity',
-        selector: { type: 'id', value: 'birth-city' },
+        dbPath: 'personalInfo.dobDay',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBDay' },
         fallbackSelectors: [
-          { type: 'name', value: 'birthCity' },
-          { type: 'xpath', value: '//label[contains(text(), "City of Birth")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBDay' }
+        ],
+        fieldType: 'select'
+      },
+      {
+        dbPath: 'personalInfo.dobMonth',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBMonth' },
+        fallbackSelectors: [
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBMonth' }
+        ],
+        fieldType: 'select'
+      },
+      {
+        dbPath: 'personalInfo.dobYear',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxDOBYear' },
+        fallbackSelectors: [
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxDOBYear' }
         ],
         fieldType: 'text'
       },
       {
-        dbPath: 'personalInfo.birthCountry',
-        selector: { type: 'id', value: 'birth-country' },
+        dbPath: 'personalInfo.birthPlace',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_POB_CITY' },
         fallbackSelectors: [
-          { type: 'name', value: 'birthCountry' },
-          { type: 'xpath', value: '//label[contains(text(), "Country/Region of Birth")]/following-sibling::select' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_POB_CITY' },
+          { type: 'xpath', value: '//label[contains(text(), "City")]/following-sibling::input' }
+        ],
+        fieldType: 'text'
+      },
+      {
+        dbPath: 'personalInfo.birthState_na',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexAPP_POB_ST_PROVINCE_NA' },
+        fallbackSelectors: [
+          { type: 'xpath', value: '//label[contains(text(), "Does Not Apply")]/preceding-sibling::input[@type="checkbox"]' }
+        ],
+        fieldType: 'checkbox'
+      },
+      {
+        dbPath: 'personalInfo.birthCountry',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_POB_CNTRY' },
+        fallbackSelectors: [
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_POB_CNTRY' },
+          { type: 'xpath', value: '//label[contains(text(), "Country/Region")]/following-sibling::select' }
         ],
         fieldType: 'select'
       },
       {
         dbPath: 'personalInfo.nationality',
-        selector: { type: 'id', value: 'nationality' },
+        selector: { type: 'id', value: 'nationality-field-id' },
         fallbackSelectors: [
           { type: 'name', value: 'nationality' },
           { type: 'xpath', value: '//label[contains(text(), "Nationality")]/following-sibling::select' }
