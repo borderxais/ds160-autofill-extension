@@ -194,7 +194,6 @@ class BorderXClient {
     
     // Format the data according to the DS-160 form fields
     return {
-        formId: data.client_id || data.id,
         applicationId: data.application_id || formData.application_id,
         
         // Personal Information section
