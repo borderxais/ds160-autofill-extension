@@ -402,21 +402,21 @@ function getFieldMappings(section) {
       },
       {
         dbPath: 'personalInfo.hasOtherNames',
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_0' },
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblOtherNames' },
         fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Yes")]/preceding-sibling::input[@type="radio"]' }
+          { type: 'xpath', value: '//table[@id="ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames"]//input' }
         ],
         fieldType: 'radio',
-        valueMap: { 'Y': true, 'N': false }
+        valueMap: { 'true': 'Y', 'false': 'N', true: 'Y', false: 'N' }
       },
       {
         dbPath: 'personalInfo.hasTelecode',
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTelecodeQuestion_0' },
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTelecodeQuestion' },
         fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "telecode")]/following-sibling::input[@type="radio"]' }
+          { type: 'xpath', value: '//table[@id="ctl00_SiteContentPlaceHolder_FormView1_rblTelecodeQuestion"]//input' }
         ],
         fieldType: 'radio',
-        valueMap: { 'Y': true, 'N': false }
+        valueMap: { 'true': 'Y', 'false': 'N', true: 'Y', false: 'N' }
       },
       {
         dbPath: 'personalInfo.gender',
