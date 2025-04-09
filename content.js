@@ -403,12 +403,11 @@ function getFieldMappings(section) {
       {
         dbPath: 'personalInfo.hasOtherNames',
         selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblOtherNames' },
-        fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_0' },
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_1' }
-        ],
         fieldType: 'radio',
-        valueMap: { 'Y': 'Y', 'N': 'N' }
+        valueMap: { 
+          'Y': 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_0', // Full ID for "Yes"
+          'N': 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_1'  // Full ID for "No"
+        }
       },
       {
         dbPath: 'personalInfo.hasTelecode',
