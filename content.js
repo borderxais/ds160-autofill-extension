@@ -338,34 +338,105 @@ function fillSelectField(field, value) {
  * Fills a radio button field
  */
 function fillRadioField(field, value, mapping) {
-  // If field is already a radio input, just check it
-  if (field.tagName === 'INPUT' && field.type === 'radio') {
-    field.checked = true;
-    field.dispatchEvent(new Event('change', { bubbles: true }));
-    return;
-  }
+  // Ensure value is exactly 'Y' or 'N'
+  const selectValue = value === 'Y' ? 'Y' : 'N';
   
-  // Otherwise, find all radio buttons in the group
-  const name = field.name || mapping.selector.value;
-  const radioButtons = document.querySelectorAll(`input[type="radio"][name="${name}"]`);
-  
-  // Determine which value to select
-  let selectValue = value;
-  if (mapping.selectValue) {
-    selectValue = typeof mapping.selectValue === 'function' 
-      ? mapping.selectValue(value) 
-      : mapping.selectValue;
-  }
-  
-  // Find the button to check
-  for (const radio of radioButtons) {
-    if (radio.value === String(selectValue) || 
-        radio.value.toLowerCase() === String(selectValue).toLowerCase()) {
-      radio.checked = true;
-      radio.dispatchEvent(new Event('change', { bubbles: true }));
-      return;
+  // APPROACH 1: Find by name and value - most reliable for DS-160
+  const name = mapping.selector.value;
+  if (typeof name === 'string') {
+    // For ASP.NET forms, we need to escape $ in the selector
+    const nameForQuery = name.replace(/\$/g, '\\$');
+    const radioButtons = document.querySelectorAll(`input[type="radio"][name="${nameForQuery}"]`);
+    
+    if (radioButtons.length > 0) {
+      // Try to find by value first
+      for (const radio of radioButtons) {
+        if (radio.value === selectValue) {
+          radio.checked = true;
+          radio.dispatchEvent(new Event('change', { bubbles: true }));
+          
+          // Trigger onclick if it exists
+          if (radio.onclick) {
+            try {
+              radio.onclick();
+            } catch (e) {}
+          }
+          return true;
+        }
+      }
+      
+      // If not found by value, use position (0=Yes, 1=No)
+      const index = selectValue === 'Y' ? 0 : 1;
+      if (index < radioButtons.length) {
+        radioButtons[index].checked = true;
+        radioButtons[index].dispatchEvent(new Event('change', { bubbles: true }));
+        
+        if (radioButtons[index].onclick) {
+          try {
+            radioButtons[index].onclick();
+          } catch (e) {}
+        }
+        return true;
+      }
     }
   }
+  
+  // APPROACH 2: Try direct ID selection for DS-160 form pattern
+  if (typeof mapping.selector.value === 'string' && mapping.selector.value.includes('$')) {
+    const baseId = mapping.selector.value.replace(/\$/g, '_');
+    const radioId = selectValue === 'Y' ? `${baseId}_0` : `${baseId}_1`;
+    
+    const radioToSelect = document.getElementById(radioId);
+    if (radioToSelect) {
+      radioToSelect.checked = true;
+      radioToSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      if (radioToSelect.onclick) {
+        try {
+          radioToSelect.onclick();
+        } catch (e) {}
+      }
+      return true;
+    }
+  }
+  
+  // APPROACH 3: Use fallback selectors if available
+  if (mapping.fallbackSelectors && mapping.fallbackSelectors.length > 0) {
+    const index = selectValue === 'Y' ? 0 : 1;
+    if (index < mapping.fallbackSelectors.length) {
+      const fallbackSelector = mapping.fallbackSelectors[index];
+      let radioElement = null;
+      
+      if (fallbackSelector.type === 'id') {
+        radioElement = document.getElementById(fallbackSelector.value);
+      } else if (fallbackSelector.type === 'name') {
+        radioElement = document.querySelector(`[name="${fallbackSelector.value}"]`);
+      } else if (fallbackSelector.type === 'xpath') {
+        const result = document.evaluate(
+          fallbackSelector.value,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        radioElement = result.singleNodeValue;
+      }
+      
+      if (radioElement) {
+        radioElement.checked = true;
+        radioElement.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        if (radioElement.onclick) {
+          try {
+            radioElement.onclick();
+          } catch (e) {}
+        }
+        return true;
+      }
+    }
+  }
+  
+  return false;
 }
 
 /**
@@ -403,11 +474,12 @@ function getFieldMappings(section) {
       {
         dbPath: 'personalInfo.hasOtherNames',
         selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblOtherNames' },
-        fieldType: 'radio',
-        valueMap: { 
-          'Y': 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_0', // Full ID for "Yes"
-          'N': 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_1'  // Full ID for "No"
-        }
+        fallbackSelectors: [
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_0' }, // Yes option
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_1' }  // No option
+        ],
+        fieldType: 'radio'
+        // No valueMap needed since database values match form values
       },
       {
         dbPath: 'personalInfo.hasTelecode',
@@ -415,8 +487,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'xpath', value: '//table[@id="ctl00_SiteContentPlaceHolder_FormView1_rblTelecodeQuestion"]//input' }
         ],
-        fieldType: 'radio',
-        valueMap: { 'true': 'Y', 'false': 'N', true: 'Y', false: 'N' }
+        fieldType: 'radio'
+        // No valueMap needed since database values match form values
       },
       {
         dbPath: 'personalInfo.gender',
