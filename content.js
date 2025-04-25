@@ -121,63 +121,22 @@ function detectCurrentFormSection() {
 }
 
 /**
- * Fills form fields for a specific section
- */
-function fillFormSection(section, clientData) {
-  // Get field mappings for this section
-  const fieldMappings = getFieldMappings(section);
-  
-  let filledCount = 0;
-  const errors = [];
-  
-  // Process each field mapping
-  for (const mapping of fieldMappings) {
-    try {
-      // Get field value from client data
-      const value = getValueByPath(clientData, mapping.dbPath);
-      
-      // Skip if no value
-      if (value === undefined || value === null || value === '') {
-        continue;
-      }
-      
-      // Find the field in the form
-      const field = findField(mapping);
-      
-      if (!field) {
-        console.warn(`Field not found: ${mapping.dbPath}`);
-        continue;
-      }
-      
-      // Fill the field
-      const success = fillField(field, value, mapping);
-      
-      if (success) {
-        filledCount++;
-        console.log(`Successfully filled field: ${mapping.dbPath} with value: ${value}`);
-      } else {
-        console.warn(`Failed to fill field: ${mapping.dbPath}`);
-        errors.push(`Failed to fill field: ${mapping.dbPath}`);
-      }
-    } catch (error) {
-      console.error(`Error filling field: ${mapping.dbPath}`, error);
-      errors.push(`Error filling field: ${mapping.dbPath}: ${error.message}`);
-    }
-  }
-  
-  return {
-    filledCount,
-    errors
-  };
-}
-
-/**
  * Gets a value from an object using dot notation path
  */
 function getValueByPath(obj, path) {
   return path.split('.').reduce((prev, curr) => {
     return prev ? prev[curr] : null;
   }, obj);
+}
+
+/**
+ * Gets a value from client data
+ */
+function getValueFromClientData(clientData, dbPath) {
+  // Get the value directly from the client data since it's already translated
+  const value = getValueByPath(clientData, dbPath);
+  console.log(`Using translated value for ${dbPath}:`, value);
+  return value;
 }
 
 /**
@@ -437,6 +396,57 @@ function fillRadioField(field, value, mapping) {
   }
   
   return false;
+}
+
+/**
+ * Fills form fields for a specific section
+ */
+function fillFormSection(section, clientData) {
+  // Get field mappings for this section
+  const fieldMappings = getFieldMappings(section);
+  
+  let filledCount = 0;
+  const errors = [];
+  
+  // Process each field mapping
+  for (const mapping of fieldMappings) {
+    try {
+      // Get field value from client data (already translated)
+      const value = getValueFromClientData(clientData, mapping.dbPath);
+      
+      // Skip if no value
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+      
+      // Find the field in the form
+      const field = findField(mapping);
+      
+      if (!field) {
+        console.warn(`Field not found: ${mapping.dbPath}`);
+        continue;
+      }
+      
+      // Fill the field
+      const success = fillField(field, value, mapping);
+      
+      if (success) {
+        filledCount++;
+        console.log(`Successfully filled field: ${mapping.dbPath} with value: ${value}`);
+      } else {
+        console.warn(`Failed to fill field: ${mapping.dbPath}`);
+        errors.push(`Failed to fill field: ${mapping.dbPath}`);
+      }
+    } catch (error) {
+      console.error(`Error filling field: ${mapping.dbPath}`, error);
+      errors.push(`Error filling field: ${mapping.dbPath}: ${error.message}`);
+    }
+  }
+  
+  return {
+    filledCount,
+    errors
+  };
 }
 
 /**
