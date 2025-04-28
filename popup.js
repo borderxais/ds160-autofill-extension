@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const logoutBtn = document.getElementById('logoutBtn');
     
     // Get main DOM elements
-    const formIdInput = document.getElementById('formId');
+    const applicationIdInput = document.getElementById('applicationId');
     const loadDataBtn = document.getElementById('loadDataBtn');
     const fillFormBtn = document.getElementById('fillFormBtn');
     const statusMessage = document.getElementById('statusMessage');
@@ -21,10 +21,10 @@ document.addEventListener('DOMContentLoaded', function() {
         loginContainer.style.display = 'none';
         mainContainer.style.display = 'block';
         
-        // Load form ID if previously used
-        chrome.storage.local.get('lastFormId', function(result) {
-          if (result.lastFormId) {
-            formIdInput.value = result.lastFormId;
+        // Load application ID if previously used
+        chrome.storage.local.get('lastApplicationId', function(result) {
+          if (result.lastApplicationId) {
+            applicationIdInput.value = result.lastApplicationId;
           }
         });
       } else {
@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear inputs
         emailInput.value = '';
         passwordInput.value = '';
-        formIdInput.value = '';
+        applicationIdInput.value = '';
         
         showLoginStatus('Logged out successfully', 'success');
       });
@@ -136,46 +136,32 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle load data button click
     loadDataBtn.addEventListener('click', function() {
-      const formId = formIdInput.value.trim();
+      const applicationId = applicationIdInput.value.trim();
       
-      if (!formId) {
-        showStatus('Please enter a form ID', 'error');
+      if (!applicationId) {
+        showStatus('Please enter an application ID', 'error');
         return;
       }
       
       // Show loading status
       showStatus('Loading form data...', 'info');
       
-      // Save form ID for future use
-      chrome.storage.local.set({ lastFormId: formId });
+      // Save application ID for future use
+      chrome.storage.local.set({ lastApplicationId: applicationId });
       
       // Fetch form data from the API
-      window.borderXClient.fetchFormData(formId)
+      window.borderXClient.fetchFormData(applicationId)
         .then(formData => {
           console.log('Form data loaded successfully!');
           console.log('Form data structure:', Object.keys(formData));
           
-          // Check if personalInfo exists and has data
-          if (formData.personalInfo) {
-            console.log('Personal info fields:', Object.keys(formData.personalInfo));
-            console.log('Sample personal info values:', {
-              surname: formData.personalInfo.surname,
-              givenName: formData.personalInfo.givenName,
-              gender: formData.personalInfo.gender
-            });
-          } else {
-            console.warn('No personalInfo section found in the data!');
-          }
-          
           // Store the form data in Chrome storage
-          chrome.storage.local.set({ currentFormData: formData }, function() {
+          chrome.storage.local.set({ 
+            currentFormData: formData,
+            currentApplicationId: applicationId
+          }, function() {
             console.log('Form data saved to Chrome storage');
             showStatus('Form data loaded successfully!', 'success');
-            
-            // Verify what was stored
-            chrome.storage.local.get('currentFormData', function(result) {
-              console.log('Verified data in storage:', Object.keys(result.currentFormData));
-            });
           });
         })
         .catch(error => {
@@ -187,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle fill form button click
     fillFormBtn.addEventListener('click', function() {
       // Check if we have form data
-      chrome.storage.local.get('currentFormData', function(result) {
+      chrome.storage.local.get(['currentFormData', 'currentApplicationId'], function(result) {
         if (!result.currentFormData) {
           showStatus('Please load form data first', 'error');
           return;
@@ -201,39 +187,54 @@ document.addEventListener('DOMContentLoaded', function() {
           const activeTab = tabs[0];
           
           // Check if we're on the DS-160 website
-          if (!activeTab.url.includes('ceac.state.gov')) {
+          if (!activeTab || !activeTab.url || !activeTab.url.includes('ceac.state.gov')) {
             showStatus('Please navigate to the DS-160 form website first', 'error');
             return;
           }
           
-          // Send message to content script to fill the form
-          chrome.tabs.sendMessage(
-            activeTab.id,
-            { action: 'fillForm', clientData: result.currentFormData },
-            function(response) {
-              if (chrome.runtime.lastError) {
-                console.error('Error sending message:', chrome.runtime.lastError);
-                showStatus('Error: Could not communicate with the page', 'error');
-                return;
-              }
-              
-              if (response && response.success) {
-                showStatus(response.message, 'success');
-                
-                // Log the event
-                chrome.runtime.sendMessage({
-                  action: 'logEvent',
-                  data: {
-                    formId: formIdInput.value.trim(),
-                    section: response.section,
-                    filledCount: response.filledCount
-                  }
-                });
-              } else {
-                showStatus(`Error: ${response ? response.error : 'Unknown error'}`, 'error');
-              }
+          // Inject content script if not already injected
+          chrome.scripting.executeScript({
+            target: { tabId: activeTab.id },
+            files: ['content.js']
+          }, function() {
+            if (chrome.runtime.lastError) {
+              console.warn('Script injection warning:', chrome.runtime.lastError);
+              // Continue anyway as the script might already be injected
             }
-          );
+            
+            // Send message to content script to fill the form
+            chrome.tabs.sendMessage(
+              activeTab.id,
+              { 
+                action: 'fillForm', 
+                clientData: result.currentFormData,
+                applicationId: result.currentApplicationId
+              },
+              function(response) {
+                if (chrome.runtime.lastError) {
+                  console.error('Error sending message:', chrome.runtime.lastError);
+                  showStatus('Error: Could not communicate with the page. Please refresh the DS-160 form page and try again.', 'error');
+                  return;
+                }
+                
+                if (response && response.success) {
+                  showStatus(response.message, 'success');
+                  
+                  // Log the event
+                  chrome.runtime.sendMessage({
+                    action: 'logEvent',
+                    data: {
+                      applicationId: result.currentApplicationId,
+                      section: response.section,
+                      filledCount: response.filledCount
+                    }
+                  });
+                } else {
+                  showStatus(`Error: ${response ? response.error : 'Unknown error'}`, 'error');
+                }
+              }
+            );
+          });
         });
       });
     });

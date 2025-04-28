@@ -31,6 +31,7 @@
       border-radius: 4px;
       cursor: pointer;
       font-weight: bold;
+      margin-bottom: 10px;
     }
     button:hover {
       background-color: #006abc;
@@ -56,43 +57,50 @@
       color: #31708f;
       display: block;
     }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
-    <div class="container" id="loginContainer">
-      <h2>DS-160 Autofill Helper</h2>
-      
-      <div class="input-group">
+  <div class="container">
+    <!-- Login Container -->
+    <div id="loginContainer">
+      <h2>Login</h2>
+      <div class="form-group">
         <label for="email">Email:</label>
         <input type="email" id="email" placeholder="Enter your email">
       </div>
-      
-      <div class="input-group">
+      <div class="form-group">
         <label for="password">Password:</label>
         <input type="password" id="password" placeholder="Enter your password">
       </div>
-      
       <button id="loginBtn">Login</button>
       <div id="loginStatus" class="status"></div>
     </div>
-    
-    <div class="container" id="mainContainer" style="display: none;">
+
+    <!-- Main Container -->
+    <div id="mainContainer" style="display: none;">
       <h2>DS-160 Autofill Helper</h2>
-      
-      <div class="input-group">
+      <div class="form-group">
         <label for="applicationId">Original Form Application ID:</label>
         <input type="text" id="applicationId" placeholder="Enter the original DS-160 form ID">
       </div>
-      
-      <button id="loadDataBtn">Load My Data</button>
-      <button id="fillFormBtn">Fill DS-160 Form</button>
-      <button id="logoutBtn">Logout</button>
-      
+      <div class="button-group">
+        <button id="loadDataBtn">Load Form Data</button>
+        <button id="fillFormBtn">Fill DS-160 Form</button>
+        <button id="logoutBtn">Logout</button>
+      </div>
       <div id="statusMessage" class="status"></div>
     </div>
-    
-    <!-- Load scripts -->
-    <script src="supabase-client.js"></script>
-    <script src="popup.js"></script>
+  </div>
+
+  <script src="supabase-client.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>

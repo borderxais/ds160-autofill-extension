@@ -89,7 +89,6 @@ class BorderXClient {
       
       // Use the client endpoint that returns translation data
       console.log(`API URL: ${API_BASE_URL}/ds160/client/${original_form_application_id}`);
-      console.log(`Auth token: ${this.authToken.substring(0, 10)}...`);
       
       const response = await fetch(`${API_BASE_URL}/ds160/client/${original_form_application_id}`, {
         method: 'GET',
@@ -120,8 +119,18 @@ class BorderXClient {
       }
       
       const data = await response.json();
+      console.log('Response data:', data);
+      
+      // Remove metadata fields that we don't need for form filling
+      const { application_id, translation_created_at, translation_updated_at, ...formData } = data;
+      
+      // Ensure we have form data
+      if (!formData || Object.keys(formData).length === 0) {
+        throw new Error('Invalid response: No form data found in the translation');
+      }
+      
       console.log('Translation data fetched successfully');
-      return data.form_data;
+      return formData;
     } catch (error) {
       console.error('Error fetching translation data:', error);
       throw error;

@@ -133,10 +133,33 @@ function getValueByPath(obj, path) {
  * Gets a value from client data
  */
 function getValueFromClientData(clientData, dbPath) {
-  // Get the value directly from the client data since it's already translated
-  const value = getValueByPath(clientData, dbPath);
-  console.log(`Using translated value for ${dbPath}:`, value);
-  return value;
+  try {
+    // Split the path into parts (e.g., "personal_info.surname" -> ["personal_info", "surname"])
+    const pathParts = dbPath.split('.');
+    
+    // Start with the root object
+    let value = clientData;
+    
+    // Get the section first
+    const section = pathParts[0];
+    if (!value[section]) {
+      console.warn(`Section ${section} not found in form data`);
+      return null;
+    }
+    
+    // Navigate through the path
+    for (const part of pathParts) {
+      if (value === null || value === undefined) {
+        return null;
+      }
+      value = value[part];
+    }
+    
+    return value;
+  } catch (error) {
+    console.error(`Error getting value for path ${dbPath}:`, error);
+    return null;
+  }
 }
 
 /**
@@ -402,20 +425,27 @@ function fillRadioField(field, value, mapping) {
  * Fills form fields for a specific section
  */
 function fillFormSection(section, clientData) {
-  // Get field mappings for this section
-  const fieldMappings = getFieldMappings(section);
+  console.log(`Filling section: ${section}`);
+  console.log('Client data structure:', Object.keys(clientData));
+  
+  // Get the mappings for this section
+  const mappings = getFieldMappings(section);
+  
+  if (!mappings || !mappings.length) {
+    console.warn(`No field mappings found for section: ${section}`);
+    return { filledCount: 0 };
+  }
   
   let filledCount = 0;
-  const errors = [];
   
-  // Process each field mapping
-  for (const mapping of fieldMappings) {
+  // Try to fill each field
+  for (const mapping of mappings) {
     try {
-      // Get field value from client data (already translated)
+      // Get the value from the client data
       const value = getValueFromClientData(clientData, mapping.dbPath);
       
-      // Skip if no value
-      if (value === undefined || value === null || value === '') {
+      if (value === null || value === undefined) {
+        console.log(`No value found for ${mapping.dbPath}`);
         continue;
       }
       
@@ -423,30 +453,20 @@ function fillFormSection(section, clientData) {
       const field = findField(mapping);
       
       if (!field) {
-        console.warn(`Field not found: ${mapping.dbPath}`);
+        console.log(`Field not found for mapping:`, mapping);
         continue;
       }
       
       // Fill the field
-      const success = fillField(field, value, mapping);
-      
-      if (success) {
+      if (fillField(field, value, mapping)) {
         filledCount++;
-        console.log(`Successfully filled field: ${mapping.dbPath} with value: ${value}`);
-      } else {
-        console.warn(`Failed to fill field: ${mapping.dbPath}`);
-        errors.push(`Failed to fill field: ${mapping.dbPath}`);
       }
     } catch (error) {
-      console.error(`Error filling field: ${mapping.dbPath}`, error);
-      errors.push(`Error filling field: ${mapping.dbPath}: ${error.message}`);
+      console.error(`Error filling field ${mapping.dbPath}:`, error);
     }
   }
   
-  return {
-    filledCount,
-    errors
-  };
+  return { filledCount };
 }
 
 /**
