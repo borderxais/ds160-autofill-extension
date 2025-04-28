@@ -71,35 +71,33 @@ class BorderXClient {
   
   /**
    * Fetch DS-160 form translation data by application ID
-   * @param {string} application_id - The DS-160 application ID
+   * @param {string} original_form_application_id - The original DS-160 application ID
    * @returns {Promise} - Promise with translation data
    */
-  async fetchFormData(application_id) {
+  async fetchFormData(original_form_application_id) {
     try {
       if (!this.authToken) {
         throw new Error('Not authenticated');
       }
       
-      console.log(`Fetching translation data for application ID: ${application_id}`);
+      console.log(`Fetching translation data for application ID: ${original_form_application_id}`);
       
-      // Validate that application_id is not empty
-      if (!application_id) {
+      // Validate that original_form_application_id is not empty
+      if (!original_form_application_id) {
         throw new Error('Application ID cannot be empty');
       }
       
       // Use the client endpoint that returns translation data
-      console.log(`API URL: ${API_BASE_URL}/ds160/client/${application_id}`);
+      console.log(`API URL: ${API_BASE_URL}/ds160/client/${original_form_application_id}`);
       console.log(`Auth token: ${this.authToken.substring(0, 10)}...`);
       
-      const response = await fetch(`${API_BASE_URL}/ds160/client/${application_id}`, {
+      const response = await fetch(`${API_BASE_URL}/ds160/client/${original_form_application_id}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
           'Content-Type': 'application/json'
         }
       });
-      
-      console.log('Response status:', response.status);
       
       if (!response.ok) {
         const responseText = await response.text();
@@ -121,17 +119,9 @@ class BorderXClient {
         }
       }
       
-      const responseText = await response.text();
-      console.log('Response text (first 100 chars):', responseText.substring(0, 100));
-      
-      try {
-        const data = JSON.parse(responseText);
-        console.log('Parsed translation data:', data);
-        return this.formatFormData(data);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        throw new Error('Invalid JSON response from server');
-      }
+      const data = await response.json();
+      console.log('Translation data fetched successfully');
+      return data.form_data;
     } catch (error) {
       console.error('Error fetching translation data:', error);
       throw error;
@@ -372,7 +362,7 @@ class BorderXClient {
   /**
    * Log form fill event
    */
-  async logFormFillEvent(application_id, sectionName, success, details) {
+  async logFormFillEvent(original_form_application_id, sectionName, success, details) {
     try {
       if (!this.authToken) {
         console.warn('Not authenticated, skipping event logging');
@@ -386,7 +376,7 @@ class BorderXClient {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          application_id,
+          original_form_application_id,
           event_type: 'form_fill',
           section: sectionName,
           success,
@@ -437,11 +427,11 @@ class BorderXClient {
   
   /**
    * Log a form event
-   * @param {string} application_id - The application ID
+   * @param {string} original_form_application_id - The original application ID
    * @param {string} eventType - The type of event
    * @param {Object} eventData - Additional event data
    */
-  async logFormEvent(application_id, eventType, eventData = {}) {
+  async logFormEvent(original_form_application_id, eventType, eventData = {}) {
     try {
       if (!this.authToken) {
         throw new Error('Not authenticated');
@@ -454,7 +444,7 @@ class BorderXClient {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          application_id,
+          original_form_application_id,
           event_type: eventType,
           event_data: eventData
         })
