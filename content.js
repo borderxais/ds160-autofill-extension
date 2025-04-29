@@ -33,90 +33,49 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 });
 
 /**
+ * Maps official DS-160 page titles to our section names
+ */
+const DS160_PAGE_TO_SECTION_MAP = {
+  'Personal Information 1': 'personalInfo1',
+  'Personal Information 2': 'personalInfo2'
+  // 'Address and Phone Information': 'contactInfo',
+  // 'Passport Information': 'passportInfo',
+  // 'Travel Information': 'travelInfo',
+  // 'Travel Companions': 'travelCompanions',
+  // 'Previous U.S. Travel Information': 'previousTravel',
+  // 'U.S. Contact Information': 'usContact',
+  // 'Family Information': 'familyInfo',
+  // 'Work/Education/Training Information': 'education',
+  // 'Security and Background Information': 'securityInfo'
+};
+
+/**
  * Detects which section of the DS-160 form is currently displayed
  */
 function detectCurrentFormSection() {
-  // Check page title and content to determine which section we're on
-  const pageTitle = document.title.toLowerCase();
-  const pageContent = document.body.textContent.toLowerCase();
-  const headers = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6')).map(h => h.textContent.toLowerCase());
+  // Get the page title from the DS-160 form
+  const pageTitle = document.title.trim();
+  console.log('Current DS-160 page title:', pageTitle);
   
-  // Personal Information section
-  if (
-    pageTitle.includes('personal') || 
-    headers.some(h => h.includes('personal')) ||
-    pageContent.includes('name') && pageContent.includes('date of birth')
-  ) {
-    return 'personalInfo';
+  // Find our section name that corresponds to this DS-160 page
+  for (const [ds160Title, sectionName] of Object.entries(DS160_PAGE_TO_SECTION_MAP)) {
+    if (pageTitle.toLowerCase().includes(ds160Title.toLowerCase())) {
+      console.log(`Matched section: ${sectionName} for page: ${ds160Title}`);
+      return sectionName;
+    }
   }
   
-  // Address/Phone/Email section
-  if (
-    pageTitle.includes('address') || 
-    pageTitle.includes('contact') || 
-    headers.some(h => h.includes('address') || h.includes('contact')) ||
-    pageContent.includes('street address') && pageContent.includes('phone number')
-  ) {
-    return 'contactInfo';
+  // If no exact match found, try matching by URL
+  const url = window.location.href.toLowerCase();
+  if (url.includes('complete_personal.aspx')) {
+    console.log('Matched section by URL: personalInfo1');
+    return 'personalInfo1';
+  } else if (url.includes('complete_personalcont.aspx')) {
+    console.log('Matched section by URL: personalInfo2');
+    return 'personalInfo2';
   }
   
-  // Passport Information section
-  if (
-    pageTitle.includes('passport') || 
-    headers.some(h => h.includes('passport')) ||
-    pageContent.includes('passport number') && pageContent.includes('expiration date')
-  ) {
-    return 'passportInfo';
-  }
-  
-  // Travel Information section
-  if (
-    pageTitle.includes('travel') || 
-    headers.some(h => h.includes('travel')) ||
-    pageContent.includes('purpose of trip') && pageContent.includes('arrival date')
-  ) {
-    return 'travelInfo';
-  }
-  
-  // Education section
-  if (
-    pageTitle.includes('education') || 
-    headers.some(h => h.includes('education') || h.includes('school')) ||
-    pageContent.includes('school name') && pageContent.includes('degree')
-  ) {
-    return 'educationInfo';
-  }
-  
-  // Work/Employment section
-  if (
-    pageTitle.includes('work') || 
-    pageTitle.includes('employment') || 
-    headers.some(h => h.includes('work') || h.includes('employment') || h.includes('occupation')) ||
-    pageContent.includes('employer name') && pageContent.includes('job title')
-  ) {
-    return 'workInfo';
-  }
-  
-  // Security and Background section
-  if (
-    pageTitle.includes('security') || 
-    pageTitle.includes('background') || 
-    headers.some(h => h.includes('security') || h.includes('background')) ||
-    pageContent.includes('criminal') && pageContent.includes('terrorist')
-  ) {
-    return 'securityInfo';
-  }
-  
-  // Family Information section
-  if (
-    pageTitle.includes('family') || 
-    pageTitle.includes('relatives') || 
-    headers.some(h => h.includes('family') || h.includes('relatives')) ||
-    pageContent.includes('spouse') && pageContent.includes('children')
-  ) {
-    return 'familyInfo';
-  }
-  
+  console.warn('Could not determine section from page title:', pageTitle);
   return null;
 }
 
@@ -134,30 +93,30 @@ function getValueByPath(obj, path) {
  */
 function getValueFromClientData(clientData, dbPath) {
   try {
-    // Split the path into parts (e.g., "personal_info.surname" -> ["personal_info", "surname"])
-    const pathParts = dbPath.split('.');
-    
-    // Start with the root object
-    let value = clientData;
-    
-    // Get the section first
-    const section = pathParts[0];
-    if (!value[section]) {
-      console.warn(`Section ${section} not found in form data`);
+    // Get the current section from the DS-160 page title
+    const section = detectCurrentFormSection();
+    if (!section) {
+      console.warn('Could not determine current section');
       return null;
     }
     
-    // Navigate through the path
-    for (const part of pathParts) {
-      if (value === null || value === undefined) {
-        return null;
-      }
-      value = value[part];
+    // Check if we have data for this section
+    if (!clientData[section]) {
+      console.warn(`No data found for section: ${section}`);
+      return null;
     }
     
+    // Get the field value from the section
+    const value = clientData[section][dbPath];
+    if (value === undefined) {
+      console.warn(`Field ${dbPath} not found in section ${section}`);
+      return null;
+    }
+    
+    console.log(`Found value for ${section}.${dbPath}:`, value);
     return value;
   } catch (error) {
-    console.error(`Error getting value for path ${dbPath}:`, error);
+    console.error('Error getting value from client data:', error);
     return null;
   }
 }
@@ -474,72 +433,79 @@ function fillFormSection(section, clientData) {
  */
 function getFieldMappings(section) {
   const mappings = {
-    personalInfo: [
+    personalInfo1: [
       {
-        dbPath: 'personalInfo.surname',
+        dbPath: 'surname',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SURNAME' },
         fallbackSelectors: [
-          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_SURNAME' },
-          { type: 'xpath', value: '//label[contains(text(), "Surnames")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_SURNAME' }
         ],
         fieldType: 'text'
       },
       {
-        dbPath: 'personalInfo.givenName',
+        dbPath: 'givenName',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_GIVEN_NAME' },
         fallbackSelectors: [
-          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_GIVEN_NAME' },
-          { type: 'xpath', value: '//label[contains(text(), "Given Names")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_GIVEN_NAME' }
         ],
         fieldType: 'text'
       },
       {
-        dbPath: 'personalInfo.fullNameNative_na',
+        dbPath: 'fullNameNative_na',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexAPP_FULL_NAME_NATIVE_NA' },
         fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Does Not Apply/Technology Not Available")]/preceding-sibling::input[@type="checkbox"]' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_FULL_NAME_NATIVE_NA' }
         ],
         fieldType: 'checkbox'
       },
       {
-        dbPath: 'personalInfo.hasOtherNames',
+        dbPath: 'hasOtherNames',
         selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblOtherNames' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_0' }, // Yes option
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_1' }  // No option
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_0' },
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblOtherNames_1' }
         ],
-        fieldType: 'radio'
-        // No valueMap needed since database values match form values
+        fieldType: 'radio',
+        valueMap: {
+          'Y': '0',
+          'N': '1'
+        }
       },
       {
-        dbPath: 'personalInfo.hasTelecode',
+        dbPath: 'hasTelecode',
         selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTelecodeQuestion' },
         fallbackSelectors: [
-          { type: 'xpath', value: '//table[@id="ctl00_SiteContentPlaceHolder_FormView1_rblTelecodeQuestion"]//input' }
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTelecodeQuestion_0' },
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTelecodeQuestion_1' }
         ],
-        fieldType: 'radio'
-        // No valueMap needed since database values match form values
+        fieldType: 'radio',
+        valueMap: {
+          'Y': '0',
+          'N': '1'
+        }
       },
       {
-        dbPath: 'personalInfo.gender',
+        dbPath: 'gender',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_GENDER' },
         fallbackSelectors: [
-          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_GENDER' },
-          { type: 'xpath', value: '//label[contains(text(), "Sex")]/following-sibling::select' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_GENDER' }
         ],
-        fieldType: 'select'
+        fieldType: 'select',
+        valueMap: {
+          'M': 'M',
+          'F': 'F'
+        }
       },
       {
-        dbPath: 'personalInfo.maritalStatus',
+        dbPath: 'maritalStatus',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_MARITAL_STATUS' },
         fallbackSelectors: [
-          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_MARITAL_STATUS' },
-          { type: 'xpath', value: '//label[contains(text(), "Marital Status")]/following-sibling::select' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_MARITAL_STATUS' }
         ],
         fieldType: 'select'
       },
       {
-        dbPath: 'personalInfo.dobDay',
+        dbPath: 'dobDay',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBDay' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBDay' }
@@ -547,7 +513,7 @@ function getFieldMappings(section) {
         fieldType: 'select'
       },
       {
-        dbPath: 'personalInfo.dobMonth',
+        dbPath: 'dobMonth',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBMonth' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBMonth' }
@@ -555,7 +521,7 @@ function getFieldMappings(section) {
         fieldType: 'select'
       },
       {
-        dbPath: 'personalInfo.dobYear',
+        dbPath: 'dobYear',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxDOBYear' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxDOBYear' }
@@ -563,456 +529,63 @@ function getFieldMappings(section) {
         fieldType: 'text'
       },
       {
-        dbPath: 'personalInfo.birthPlace',
+        dbPath: 'birthCity',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_POB_CITY' },
         fallbackSelectors: [
-          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_POB_CITY' },
-          { type: 'xpath', value: '//label[contains(text(), "City")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_POB_CITY' }
         ],
         fieldType: 'text'
       },
       {
-        dbPath: 'personalInfo.birthState_na',
+        dbPath: 'birthState_na',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexAPP_POB_ST_PROVINCE_NA' },
         fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Does Not Apply")]/preceding-sibling::input[@type="checkbox"]' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_POB_ST_PROVINCE_NA' }
         ],
         fieldType: 'checkbox'
       },
       {
-        dbPath: 'personalInfo.birthCountry',
+        dbPath: 'birthCountry',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_POB_CNTRY' },
         fallbackSelectors: [
-          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_POB_CNTRY' },
-          { type: 'xpath', value: '//label[contains(text(), "Country/Region")]/following-sibling::select' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_POB_CNTRY' }
         ],
         fieldType: 'select'
       },
       {
-        dbPath: 'personalInfo.nationality',
-        selector: { type: 'id', value: 'nationality-field-id' },
+        dbPath: 'nationality',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_NATIONALITY' },
         fallbackSelectors: [
-          { type: 'name', value: 'nationality' },
-          { type: 'xpath', value: '//label[contains(text(), "Nationality")]/following-sibling::select' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_NATIONALITY' }
         ],
         fieldType: 'select'
       }
     ],
     
-    contactInfo: [
+    personalInfo2: [
       {
-        dbPath: 'contactInfo.streetAddress1',
-        selector: { type: 'id', value: 'home-address-1' },
+        dbPath: 'otherSurnames',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_OTHER_SURNAMES' },
         fallbackSelectors: [
-          { type: 'name', value: 'address1' },
-          { type: 'xpath', value: '//label[contains(text(), "Street Address")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_OTHER_SURNAMES' }
         ],
         fieldType: 'text'
       },
       {
-        dbPath: 'contactInfo.streetAddress2',
-        selector: { type: 'id', value: 'home-address-2' },
+        dbPath: 'otherGivenNames',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_OTHER_GIVEN_NAMES' },
         fallbackSelectors: [
-          { type: 'name', value: 'address2' },
-          { type: 'xpath', value: '//label[contains(text(), "Apartment")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_OTHER_GIVEN_NAMES' }
         ],
         fieldType: 'text'
       },
       {
-        dbPath: 'contactInfo.city',
-        selector: { type: 'id', value: 'home-city' },
+        dbPath: 'telecode',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_NAME_TELECODE' },
         fallbackSelectors: [
-          { type: 'name', value: 'city' },
-          { type: 'xpath', value: '//label[contains(text(), "City")]/following-sibling::input' }
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_NAME_TELECODE' }
         ],
         fieldType: 'text'
-      },
-      {
-        dbPath: 'contactInfo.state',
-        selector: { type: 'id', value: 'home-state' },
-        fallbackSelectors: [
-          { type: 'name', value: 'state' },
-          { type: 'xpath', value: '//label[contains(text(), "State/Province")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'contactInfo.postalCode',
-        selector: { type: 'id', value: 'home-postal-code' },
-        fallbackSelectors: [
-          { type: 'name', value: 'postalCode' },
-          { type: 'xpath', value: '//label[contains(text(), "Postal Code")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'contactInfo.country',
-        selector: { type: 'id', value: 'home-country' },
-        fallbackSelectors: [
-          { type: 'name', value: 'country' },
-          { type: 'xpath', value: '//label[contains(text(), "Country/Region")]/following-sibling::select' }
-        ],
-        fieldType: 'select'
-      },
-      {
-        dbPath: 'contactInfo.phone',
-        selector: { type: 'id', value: 'phone-number' },
-        fallbackSelectors: [
-          { type: 'name', value: 'phoneNumber' },
-          { type: 'xpath', value: '//label[contains(text(), "Phone Number")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'contactInfo.email',
-        selector: { type: 'id', value: 'email' },
-        fallbackSelectors: [
-          { type: 'name', value: 'email' },
-          { type: 'xpath', value: '//label[contains(text(), "Email Address")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      }
-    ],
-    
-    passportInfo: [
-      {
-        dbPath: 'passportInfo.passportNumber',
-        selector: { type: 'id', value: 'passport-number' },
-        fallbackSelectors: [
-          { type: 'name', value: 'passportNumber' },
-          { type: 'xpath', value: '//label[contains(text(), "Passport Number")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'passportInfo.issuingCountry',
-        selector: { type: 'id', value: 'passport-issuing-country' },
-        fallbackSelectors: [
-          { type: 'name', value: 'issuingCountry' },
-          { type: 'xpath', value: '//label[contains(text(), "Country/Authority")]/following-sibling::select' }
-        ],
-        fieldType: 'select'
-      },
-      {
-        dbPath: 'passportInfo.issueDate',
-        selector: { type: 'id', value: 'passport-issue-date' },
-        fallbackSelectors: [
-          { type: 'name', value: 'issueDate' },
-          { type: 'xpath', value: '//label[contains(text(), "Issuance Date")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      },
-      {
-        dbPath: 'passportInfo.expirationDate',
-        selector: { type: 'id', value: 'passport-expiration-date' },
-        fallbackSelectors: [
-          { type: 'name', value: 'expirationDate' },
-          { type: 'xpath', value: '//label[contains(text(), "Expiration Date")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      }
-    ],
-    
-    travelInfo: [
-      {
-        dbPath: 'travelInfo.purposeOfTrip',
-        selector: { type: 'id', value: 'purpose-of-trip' },
-        fallbackSelectors: [
-          { type: 'name', value: 'purposeOfTrip' },
-          { type: 'xpath', value: '//label[contains(text(), "Purpose of Trip")]/following-sibling::select' }
-        ],
-        fieldType: 'select'
-      },
-      {
-        dbPath: 'travelInfo.intendedArrivalDate',
-        selector: { type: 'id', value: 'intended-arrival-date' },
-        fallbackSelectors: [
-          { type: 'name', value: 'arrivalDate' },
-          { type: 'xpath', value: '//label[contains(text(), "Arrival Date")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      },
-      {
-        dbPath: 'travelInfo.intendedDepartureDate',
-        selector: { type: 'id', value: 'intended-departure-date' },
-        fallbackSelectors: [
-          { type: 'name', value: 'departureDate' },
-          { type: 'xpath', value: '//label[contains(text(), "Departure Date")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      },
-      {
-        dbPath: 'travelInfo.previouslyVisitedUS',
-        selector: { type: 'name', value: 'previouslyVisitedUS' },
-        fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Previously visited the United States")]/following-sibling::input[@type="radio"]' }
-        ],
-        fieldType: 'radio',
-        selectValue: (value) => value ? 'YES' : 'NO'
-      },
-      {
-        dbPath: 'travelInfo.usContactName',
-        selector: { type: 'id', value: 'us-contact-name' },
-        fallbackSelectors: [
-          { type: 'name', value: 'usContactName' },
-          { type: 'xpath', value: '//label[contains(text(), "Contact Person Name")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'travelInfo.usContactAddress',
-        selector: { type: 'id', value: 'us-contact-address' },
-        fallbackSelectors: [
-          { type: 'name', value: 'usContactAddress' },
-          { type: 'xpath', value: '//label[contains(text(), "Contact Address")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'travelInfo.usContactPhone',
-        selector: { type: 'id', value: 'us-contact-phone' },
-        fallbackSelectors: [
-          { type: 'name', value: 'usContactPhone' },
-          { type: 'xpath', value: '//label[contains(text(), "Contact Phone")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      }
-    ],
-    
-    educationInfo: [
-      {
-        dbPath: 'educationInfo.schoolName',
-        selector: { type: 'id', value: 'school-name' },
-        fallbackSelectors: [
-          { type: 'name', value: 'schoolName' },
-          { type: 'xpath', value: '//label[contains(text(), "School Name")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'educationInfo.schoolAddress',
-        selector: { type: 'id', value: 'school-address' },
-        fallbackSelectors: [
-          { type: 'name', value: 'schoolAddress' },
-          { type: 'xpath', value: '//label[contains(text(), "School Address")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'educationInfo.schoolCity',
-        selector: { type: 'id', value: 'school-city' },
-        fallbackSelectors: [
-          { type: 'name', value: 'schoolCity' },
-          { type: 'xpath', value: '//label[contains(text(), "School City")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'educationInfo.schoolState',
-        selector: { type: 'id', value: 'school-state' },
-        fallbackSelectors: [
-          { type: 'name', value: 'schoolState' },
-          { type: 'xpath', value: '//label[contains(text(), "School State/Province")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'educationInfo.schoolCountry',
-        selector: { type: 'id', value: 'school-country' },
-        fallbackSelectors: [
-          { type: 'name', value: 'schoolCountry' },
-          { type: 'xpath', value: '//label[contains(text(), "School Country")]/following-sibling::select' }
-        ],
-        fieldType: 'select'
-      },
-      {
-        dbPath: 'educationInfo.degree',
-        selector: { type: 'id', value: 'degree' },
-        fallbackSelectors: [
-          { type: 'name', value: 'degree' },
-          { type: 'xpath', value: '//label[contains(text(), "Degree")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'educationInfo.fieldOfStudy',
-        selector: { type: 'id', value: 'field-of-study' },
-        fallbackSelectors: [
-          { type: 'name', value: 'fieldOfStudy' },
-          { type: 'xpath', value: '//label[contains(text(), "Field of Study")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'educationInfo.attendedFrom',
-        selector: { type: 'id', value: 'attended-from' },
-        fallbackSelectors: [
-          { type: 'name', value: 'attendedFrom' },
-          { type: 'xpath', value: '//label[contains(text(), "From")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      },
-      {
-        dbPath: 'educationInfo.attendedTo',
-        selector: { type: 'id', value: 'attended-to' },
-        fallbackSelectors: [
-          { type: 'name', value: 'attendedTo' },
-          { type: 'xpath', value: '//label[contains(text(), "To")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      }
-    ],
-    
-    workInfo: [
-      {
-        dbPath: 'workInfo.employerName',
-        selector: { type: 'id', value: 'employer-name' },
-        fallbackSelectors: [
-          { type: 'name', value: 'employerName' },
-          { type: 'xpath', value: '//label[contains(text(), "Employer Name")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'workInfo.employerAddress',
-        selector: { type: 'id', value: 'employer-address' },
-        fallbackSelectors: [
-          { type: 'name', value: 'employerAddress' },
-          { type: 'xpath', value: '//label[contains(text(), "Employer Address")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'workInfo.employerCity',
-        selector: { type: 'id', value: 'employer-city' },
-        fallbackSelectors: [
-          { type: 'name', value: 'employerCity' },
-          { type: 'xpath', value: '//label[contains(text(), "Employer City")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'workInfo.employerState',
-        selector: { type: 'id', value: 'employer-state' },
-        fallbackSelectors: [
-          { type: 'name', value: 'employerState' },
-          { type: 'xpath', value: '//label[contains(text(), "Employer State/Province")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'workInfo.employerCountry',
-        selector: { type: 'id', value: 'employer-country' },
-        fallbackSelectors: [
-          { type: 'name', value: 'employerCountry' },
-          { type: 'xpath', value: '//label[contains(text(), "Employer Country")]/following-sibling::select' }
-        ],
-        fieldType: 'select'
-      },
-      {
-        dbPath: 'workInfo.jobTitle',
-        selector: { type: 'id', value: 'job-title' },
-        fallbackSelectors: [
-          { type: 'name', value: 'jobTitle' },
-          { type: 'xpath', value: '//label[contains(text(), "Job Title")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'workInfo.description',
-        selector: { type: 'id', value: 'job-description' },
-        fallbackSelectors: [
-          { type: 'name', value: 'jobDescription' },
-          { type: 'xpath', value: '//label[contains(text(), "Job Description")]/following-sibling::textarea' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'workInfo.employedFrom',
-        selector: { type: 'id', value: 'employed-from' },
-        fallbackSelectors: [
-          { type: 'name', value: 'employedFrom' },
-          { type: 'xpath', value: '//label[contains(text(), "From")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      },
-      {
-        dbPath: 'workInfo.employedTo',
-        selector: { type: 'id', value: 'employed-to' },
-        fallbackSelectors: [
-          { type: 'name', value: 'employedTo' },
-          { type: 'xpath', value: '//label[contains(text(), "To")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      }
-    ],
-    
-    familyInfo: [
-      {
-        dbPath: 'familyInfo.spouseFirstName',
-        selector: { type: 'id', value: 'spouse-first-name' },
-        fallbackSelectors: [
-          { type: 'name', value: 'spouseFirstName' },
-          { type: 'xpath', value: '//label[contains(text(), "Spouse First Name")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'familyInfo.spouseLastName',
-        selector: { type: 'id', value: 'spouse-last-name' },
-        fallbackSelectors: [
-          { type: 'name', value: 'spouseLastName' },
-          { type: 'xpath', value: '//label[contains(text(), "Spouse Last Name")]/following-sibling::input' }
-        ],
-        fieldType: 'text'
-      },
-      {
-        dbPath: 'familyInfo.spouseDateOfBirth',
-        selector: { type: 'id', value: 'spouse-dob' },
-        fallbackSelectors: [
-          { type: 'name', value: 'spouseDOB' },
-          { type: 'xpath', value: '//label[contains(text(), "Spouse Date of Birth")]/following-sibling::input' }
-        ],
-        fieldType: 'date'
-      },
-      {
-        dbPath: 'familyInfo.spouseCountryOfBirth',
-        selector: { type: 'id', value: 'spouse-country-of-birth' },
-        fallbackSelectors: [
-          { type: 'name', value: 'spouseCountryOfBirth' },
-          { type: 'xpath', value: '//label[contains(text(), "Spouse Country of Birth")]/following-sibling::select' }
-        ],
-        fieldType: 'select'
-      }
-    ],
-    
-    securityInfo: [
-      {
-        dbPath: 'securityInfo.criminalRecord',
-        selector: { type: 'name', value: 'criminalRecord' },
-        fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Criminal Record")]/following-sibling::input[@type="radio"]' }
-        ],
-        fieldType: 'radio',
-        selectValue: (value) => value ? 'YES' : 'NO'
-      },
-      {
-        dbPath: 'securityInfo.drugOffenses',
-        selector: { type: 'name', value: 'drugOffenses' },
-        fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Drug Offenses")]/following-sibling::input[@type="radio"]' }
-        ],
-        fieldType: 'radio',
-        selectValue: (value) => value ? 'YES' : 'NO'
-      },
-      {
-        dbPath: 'securityInfo.terroristActivities',
-        selector: { type: 'name', value: 'terroristActivities' },
-        fallbackSelectors: [
-          { type: 'xpath', value: '//label[contains(text(), "Terrorist Activities")]/following-sibling::input[@type="radio"]' }
-        ],
-        fieldType: 'radio',
-        selectValue: (value) => value ? 'YES' : 'NO'
       }
     ]
   };
