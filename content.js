@@ -80,15 +80,6 @@ function detectCurrentFormSection() {
 }
 
 /**
- * Gets a value from an object using dot notation path
- */
-function getValueByPath(obj, path) {
-  return path.split('.').reduce((prev, curr) => {
-    return prev ? prev[curr] : null;
-  }, obj);
-}
-
-/**
  * Gets a value from client data
  */
 function getValueFromClientData(clientData, dbPath) {
@@ -106,8 +97,10 @@ function getValueFromClientData(clientData, dbPath) {
       return null;
     }
     
-    // Get the field value from the section
-    const value = clientData[section][dbPath];
+    // Get the field value from the section using dot notation path
+    const value = getValueByPath(clientData[section], dbPath);
+    console.log(`Looking for ${dbPath} in section ${section}:`, value);
+    
     if (value === undefined) {
       console.warn(`Field ${dbPath} not found in section ${section}`);
       return null;
@@ -118,6 +111,18 @@ function getValueFromClientData(clientData, dbPath) {
   } catch (error) {
     console.error('Error getting value from client data:', error);
     return null;
+  }
+}
+
+/**
+ * Gets a value from an object using dot notation path
+ */
+function getValueByPath(obj, path) {
+  try {
+    return path.split('.').reduce((current, key) => current && current[key], obj);
+  } catch (error) {
+    console.error(`Error getting value by path ${path}:`, error);
+    return undefined;
   }
 }
 
@@ -383,42 +388,62 @@ function fillRadioField(field, value, mapping) {
 /**
  * Fills form fields for a specific section
  */
-function fillFormSection(section, clientData) {
+async function fillFormSection(section, clientData) {
   console.log(`Filling section: ${section}`);
-  console.log('Client data structure:', Object.keys(clientData));
-  
-  // Get the mappings for this section
-  const mappings = getFieldMappings(section);
-  
-  if (!mappings || !mappings.length) {
-    console.warn(`No field mappings found for section: ${section}`);
-    return { filledCount: 0 };
-  }
+  console.log('Client data:', clientData);
   
   let filledCount = 0;
   
-  // Try to fill each field
+  // Get field mappings for this section
+  const mappings = getFieldMappings(section);
+  if (!mappings) {
+    console.warn(`No mappings found for section: ${section}`);
+    return { filledCount: 0 };
+  }
+  
+  // Process each field mapping
   for (const mapping of mappings) {
     try {
-      // Get the value from the client data
       const value = getValueFromClientData(clientData, mapping.dbPath);
-      
       if (value === null || value === undefined) {
         console.log(`No value found for ${mapping.dbPath}`);
         continue;
       }
       
-      // Find the field in the form
       const field = findField(mapping);
-      
       if (!field) {
-        console.log(`Field not found for mapping:`, mapping);
+        console.warn(`Field not found for ${mapping.dbPath}`);
         continue;
       }
       
-      // Fill the field
       if (fillField(field, value, mapping)) {
         filledCount++;
+      }
+      
+      // Handle related fields (like fullNameNative when fullNameNative_na is false)
+      if (mapping.relatedFields) {
+        for (const relatedField of mapping.relatedFields) {
+          // Check if the condition is met (if there is one)
+          if (relatedField.condition && !relatedField.condition(clientData)) {
+            console.log(`Skipping related field ${relatedField.dbPath} due to condition`);
+            continue;
+          }
+          
+          const relatedValue = getValueFromClientData(clientData, relatedField.dbPath);
+          if (relatedValue !== null && relatedValue !== undefined) {
+            const relatedElement = findField(relatedField);
+            if (relatedElement) {
+              if (fillField(relatedElement, relatedValue, relatedField)) {
+                filledCount++;
+                console.log(`Filled related field ${relatedField.dbPath}`);
+              }
+            } else {
+              console.warn(`Related field element not found for ${relatedField.dbPath}`);
+            }
+          } else {
+            console.log(`No value found for related field ${relatedField.dbPath}`);
+          }
+        }
       }
     } catch (error) {
       console.error(`Error filling field ${mapping.dbPath}:`, error);
@@ -456,7 +481,20 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_FULL_NAME_NATIVE_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        // Add special handling for the native name text field
+        relatedFields: [
+          {
+            dbPath: 'fullNameNative',
+            selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_FULL_NAME_NATIVE' },
+            fallbackSelectors: [
+              { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_FULL_NAME_NATIVE' }
+            ],
+            fieldType: 'text',
+            // Only fill this field if fullNameNative_na is not present in the data
+            condition: (data) => data.fullNameNative_na === undefined || data.fullNameNative_na === null
+          }
+        ]
       },
       {
         dbPath: 'hasOtherNames',

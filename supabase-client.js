@@ -119,7 +119,6 @@ class BorderXClient {
       }
       
       const data = await response.json();
-      console.log('Response data:', data);
       
       // Remove metadata fields that we don't need for form filling
       const { application_id, translation_created_at, translation_updated_at, ...formData } = data;
@@ -173,91 +172,32 @@ class BorderXClient {
    */
   formatFormData(data) {
     // Extract the form_data from the response
-    // The data might be nested in different ways depending on the API response
     const formData = data.form_data || data;
     
     console.log('Raw form data structure:', Object.keys(formData));
 
-    // // Get section data from the structure used in the Non-immigration Website
-    // const personalInfo = formData.personal_info || {};
-    // const contactInfo = formData.contact_info || {};
-    // const passportInfo = formData.passport_info || {};
-    // const travelInfo = formData.travel_info || {};
-    // const usContactInfo = formData.us_contact_info || {};
-    // const familyInfo = formData.family_info || {};
-    // const workEducationInfo = formData.work_education_info || {};
-    // const securityInfo = formData.security_background_info || {};
-    
-    // // Store the application ID if available
-    // const application_id = data.application_id || formData.application_id;
+    // Get section data from the structure
+    const personalInfo1 = formData.personalInfo1 || {};
+    const personalInfo2 = formData.personalInfo2 || {};
+    const contactInfo = formData.contactInfo || {};
+    const passportInfo = formData.passportInfo || {};
+    const travelInfo = formData.travelInfo || {};
+    const familyInfo = formData.familyInfo || {};
+    const workEducationInfo = formData.workEducationInfo || {};
+    const securityInfo = formData.securityInfo || {};
     
     // Format the data according to the DS-160 form fields
     return {
         application_id: data.application_id || formData.application_id,
-        
-        // Personal Information section
-        personalInfo: {
-          surname: formData.surname,
-          givenName: formData.givenName,
-          fullNameNative_na: formData.fullNameNative_na,
-          hasOtherNames: formData.hasOtherNames,
-          hasTelecode: formData.hasTelecode,
-          gender: formData.gender,
-          maritalStatus: formData.maritalStatus,
-          dateOfBirth: formData.dateOfBirth,
-          dobDay: formData.dobDay,
-          dobMonth: formData.dobMonth,
-          dobYear: formData.dobYear,
-          birthPlace: formData.birthPlace,
-          birthState_na: formData.birthState_na,
-          birthCountry: formData.birthCountry,
-          nationality: formData.nationality
-        },
-        
-        // Contact Information section
-        contactInfo: {
-          streetAddress1: formData.homeAddressLine1 || formData.streetAddress1,
-          city: formData.homeCity || formData.city,
-          state: formData.homeState || formData.state,
-          postalCode: formData.homePostalCode || formData.zipCode,
-          country: formData.homeCountry,
-          phone: formData.primaryPhone,
-          email: formData.emailAddress
-        },
-        
-        // Passport Information section
-        passportInfo: {
-          passportNumber: formData.passportNumber,
-          issuingCountry: formData.passportIssuedCountry,
-          issueDate: this.formatDate(`${formData.passportIssuedYear}-${this.monthToNumber(formData.passportIssuedMonth)}-${formData.passportIssuedDay}`),
-          expirationDate: this.formatDate(`${formData.passportExpirationYear}-${this.monthToNumber(formData.passportExpirationMonth)}-${formData.passportExpirationDay}`)
-        },
-        
-        // Travel Information section
-        travelInfo: {
-          purposeOfTrip: formData.specificPurpose,
-          intendedArrivalDate: this.formatDate(`${formData.arrivalYear}-${this.monthToNumber(formData.arrivalMonth)}-${formData.arrivalDay}`),
-          intendedDepartureDate: null, // Not present in the data
-          previouslyVisitedUS: formData.everBeenInUS === "Y",
-          usContactName: `${formData.usPocGivenName} ${formData.usPocSurname}`,
-          usContactAddress: formData.usPocAddressLine1,
-          usContactPhone: null // Not present in the data
-        },
-        
-        // Family Information section
-        familyInfo: {
-          fatherDateOfBirth: this.formatDate(`${formData.fatherDobYear}-${this.monthToNumber(formData.fatherDobMonth)}-${formData.fatherDobDay}`),
-          motherDateOfBirth: this.formatDate(`${formData.motherDobYear}-${this.monthToNumber(formData.motherDobMonth)}-${formData.motherDobDay}`),
-          hasOtherRelativesInUs: formData.hasOtherRelativesInUs === "Y"
-        },
-        
-        // Security Information section
-        securityInfo: {
-          criminalRecord: formData.previouslyDenied || false,
-          drugOffenses: false, // Not present in the data
-          terroristActivities: false // Not present in the data
-        }
-      };
+        personalInfo1,
+        personalInfo2,
+        contactInfo,
+        passportInfo,
+        travelInfo,
+        familyInfo,
+        workEducationInfo,
+        securityInfo
+    };
     }
     monthToNumber(monthAbbr) {
         const months = {
