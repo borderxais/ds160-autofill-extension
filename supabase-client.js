@@ -3,6 +3,9 @@
 // Base URL for the BorderX API
 const API_BASE_URL = 'http://localhost:5000/api';
 
+// For production
+// const API_BASE_URL = 'https://visasupport-dot-overseabiz-453023.wl.r.appspot.com/api';
+
 /**
  * BorderXClient class for handling authentication and data operations
  */
@@ -131,7 +134,6 @@ class BorderXClient {
       console.log('Translation data fetched successfully');
       return formData;
     } catch (error) {
-      console.error('Error fetching translation data:', error);
       throw error;
     }
   }
@@ -199,24 +201,7 @@ class BorderXClient {
         securityInfo
     };
     }
-    monthToNumber(monthAbbr) {
-        const months = {
-          'JAN': '01',
-          'FEB': '02',
-          'MAR': '03',
-          'APR': '04',
-          'MAY': '05',
-          'JUN': '06',
-          'JUL': '07',
-          'AUG': '08',
-          'SEP': '09',
-          'OCT': '10',
-          'NOV': '11',
-          'DEC': '12'
-        };
-        
-        return months[monthAbbr] || '01';
-      }
+
   /**
    * Format date from various formats to MM/DD/YYYY
    * @param {string} date - Date string in various formats
@@ -335,42 +320,6 @@ class BorderXClient {
     } catch (error) {
       console.error('Error logging form fill event:', error);
       // Non-critical error, don't throw
-    }
-  }
-  
-  /**
-   * Update the application ID for a DS-160 form
-   * @param {string} old_application_id - The current application ID
-   * @param {string} new_application_id - The new DS-160 application ID
-   * @returns {Promise} - Promise with updated form data
-   */
-  async updateApplicationId(old_application_id, new_application_id) {
-    try {
-      if (!this.authToken) {
-        throw new Error('Not authenticated');
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/ds160/form/${old_application_id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${this.authToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ application_id: new_application_id })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update application ID');
-      }
-      
-      // Log the event
-      this.logFormEvent(old_application_id, 'application_id_updated', { application_id: new_application_id });
-      
-      return response.json();
-    } catch (error) {
-      console.error('Error updating application ID:', error);
-      throw error;
     }
   }
   
