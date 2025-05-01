@@ -405,17 +405,17 @@ async function fillFormSection(section, clientData) {
     try {
       const value = getValueFromClientData(clientData, mapping.dbPath);
       if (value === null || value === undefined) {
-        console.log(`No value found for ${mapping.dbPath}`);
         continue;
       }
       
       const field = findField(mapping);
       if (!field) {
-        console.warn(`Field not found for ${mapping.dbPath}`);
         continue;
       }
       
-      if (fillField(field, value, mapping)) {
+      const filled = fillField(field, value, mapping);
+      if (filled) {
+        console.log(`Filled field ${mapping.dbPath} with value:`, value);
         filledCount++;
       }
       
@@ -424,23 +424,23 @@ async function fillFormSection(section, clientData) {
         for (const relatedField of mapping.relatedFields) {
           // Check if the condition is met (if there is one)
           if (relatedField.condition && !relatedField.condition(clientData)) {
-            console.log(`Skipping related field ${relatedField.dbPath} due to condition`);
             continue;
           }
           
           const relatedValue = getValueFromClientData(clientData, relatedField.dbPath);
-          if (relatedValue !== null && relatedValue !== undefined) {
-            const relatedElement = findField(relatedField);
-            if (relatedElement) {
-              if (fillField(relatedElement, relatedValue, relatedField)) {
-                filledCount++;
-                console.log(`Filled related field ${relatedField.dbPath}`);
-              }
-            } else {
-              console.warn(`Related field element not found for ${relatedField.dbPath}`);
-            }
-          } else {
-            console.log(`No value found for related field ${relatedField.dbPath}`);
+          if (relatedValue === null || relatedValue === undefined) {
+            continue;
+          }
+          
+          const relatedFieldElement = findField(relatedField);
+          if (!relatedFieldElement) {
+            continue;
+          }
+          
+          const relatedFilled = fillField(relatedFieldElement, relatedValue, relatedField);
+          if (relatedFilled) {
+            console.log(`Filled related field ${relatedField.dbPath} with value:`, relatedValue);
+            filledCount++;
           }
         }
       }
