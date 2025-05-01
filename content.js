@@ -106,13 +106,6 @@ function getValueFromClientData(clientData, dbPath) {
     // Get the field value from the section using dot notation path
     const value = getValueByPath(clientData[section], dbPath);
     console.log(`Looking for ${dbPath} in section ${section}:`, value);
-    
-    if (value === undefined) {
-      console.warn(`Field ${dbPath} not found in section ${section}`);
-      return null;
-    }
-    
-    console.log(`Found value for ${section}.${dbPath}:`, value);
     return value;
   } catch (error) {
     console.error('Error getting value from client data:', error);
@@ -593,14 +586,6 @@ function getFieldMappings(section) {
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_POB_CNTRY' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_POB_CNTRY' }
-        ],
-        fieldType: 'select'
-      },
-      {
-        dbPath: 'nationality',
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_NATIONALITY' },
-        fallbackSelectors: [
-          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_NATIONALITY' }
         ],
         fieldType: 'select'
       }
