@@ -202,49 +202,86 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
           }
           
-          // Inject content script if not already injected
-          chrome.scripting.executeScript({
-            target: { tabId: activeTab.id },
-            files: ['content.js']
-          }, function() {
-            if (chrome.runtime.lastError) {
-              console.warn('Script injection warning:', chrome.runtime.lastError);
-              // Continue anyway as the script might already be injected
-            }
-            
-            // Send message to content script to fill the form
-            chrome.tabs.sendMessage(
-              activeTab.id,
-              { 
-                action: 'fillForm', 
-                clientData: result.currentFormData,
-                applicationId: result.currentApplicationId
-              },
-              function(response) {
-                if (chrome.runtime.lastError) {
-                  console.error('Error sending message:', chrome.runtime.lastError);
-                  showStatus('Error: Could not communicate with the page. Please refresh the DS-160 form page and try again.', 'error');
-                  return;
-                }
-                
-                if (response && response.success) {
-                  showStatus(response.message, 'success');
-                  
-                  // Log the event
-                  chrome.runtime.sendMessage({
-                    action: 'logEvent',
-                    data: {
-                      applicationId: result.currentApplicationId,
-                      section: response.section,
-                      filledCount: response.filledCount
+          // First try to ping the content script
+          chrome.tabs.sendMessage(
+            activeTab.id,
+            { action: 'ping' },
+            function(pingResponse) {
+              if (chrome.runtime.lastError) {
+                // Content script not loaded, inject it
+                chrome.scripting.executeScript({
+                  target: { tabId: activeTab.id },
+                  files: ['content.js']
+                }, function() {
+                  // Now send the fill form message
+                  chrome.tabs.sendMessage(
+                    activeTab.id,
+                    { 
+                      action: 'fillForm', 
+                      clientData: result.currentFormData,
+                      applicationId: result.currentApplicationId
+                    },
+                    function(response) {
+                      if (chrome.runtime.lastError) {
+                        console.error('Error sending message:', chrome.runtime.lastError);
+                        showStatus('Error: Could not communicate with the page. Please refresh the DS-160 form page and try again.', 'error');
+                        return;
+                      }
+                      
+                      if (response && response.success) {
+                        showStatus(response.message, 'success');
+                        
+                        // Log the event
+                        chrome.runtime.sendMessage({
+                          action: 'logEvent',
+                          data: {
+                            applicationId: result.currentApplicationId,
+                            section: response.section,
+                            filledCount: response.filledCount
+                          }
+                        });
+                      } else {
+                        showStatus(`Error: ${response ? response.error : 'Unknown error'}`, 'error');
+                      }
                     }
-                  });
-                } else {
-                  showStatus(`Error: ${response ? response.error : 'Unknown error'}`, 'error');
-                }
+                  );
+                });
+              } else {
+                // Content script already loaded, send fill form message directly
+                chrome.tabs.sendMessage(
+                  activeTab.id,
+                  { 
+                    action: 'fillForm', 
+                    clientData: result.currentFormData,
+                    applicationId: result.currentApplicationId
+                  },
+                  function(response) {
+                    if (chrome.runtime.lastError) {
+                      console.error('Error sending message:', chrome.runtime.lastError);
+                      showStatus('Error: Could not communicate with the page. Please refresh the DS-160 form page and try again.', 'error');
+                      return;
+                    }
+                    
+                    if (response && response.success) {
+                      showStatus(response.message, 'success');
+                      
+                      // Log the event
+                      chrome.runtime.sendMessage({
+                        action: 'logEvent',
+                        data: {
+                          applicationId: result.currentApplicationId,
+                          section: response.section,
+                          filledCount: response.filledCount
+                        }
+                      });
+                    } else {
+                      showStatus(`Error: ${response ? response.error : 'Unknown error'}`, 'error');
+                    }
+                  }
+                );
               }
-            );
-          });
+            }
+          );
         });
       });
     });

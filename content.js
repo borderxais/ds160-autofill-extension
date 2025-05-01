@@ -1,5 +1,11 @@
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  if (request.action === 'ping') {
+    // Just respond to confirm content script is loaded
+    sendResponse({ loaded: true });
+    return true;
+  }
+  
   if (request.action === 'fillForm') {
     try {
       // Get the client data
