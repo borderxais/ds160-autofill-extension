@@ -48,7 +48,6 @@ class BorderXClient {
       
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Login error data:', errorData);
         throw new Error(errorData.error || 'Login failed');
       }
       
@@ -67,7 +66,6 @@ class BorderXClient {
       
       return data;
     } catch (error) {
-      console.error('Login error:', error);
       throw error;
     }
   }
@@ -103,20 +101,23 @@ class BorderXClient {
       
       if (!response.ok) {
         const responseText = await response.text();
-        console.error('Error response:', responseText);
         
         try {
           // Try to parse as JSON if possible
           const errorData = JSON.parse(responseText);
           throw new Error(errorData.error || 'Failed to fetch translation data');
         } catch (parseError) {
-          // If not JSON, throw with the text
+          // Format technical errors into user-friendly messages
           if (response.status === 500) {
             throw new Error('Server error: The application ID may be invalid or the translation might not exist.');
           } else if (response.status === 404) {
             throw new Error('Translation not found: Please check the application ID and ensure the form has been translated.');
+          } else if (response.status === 401) {
+            throw new Error('Your session has expired. Please log in again.');
+          } else if (response.status === 403) {
+            throw new Error('You do not have permission to access this form.');
           } else {
-            throw new Error(`Server returned ${response.status}: ${responseText.substring(0, 100)}...`);
+            throw new Error('Unable to load form data. Please try again later.');
           }
         }
       }
@@ -162,7 +163,6 @@ class BorderXClient {
       
       return response.json();
     } catch (error) {
-      console.error('Error fetching user forms:', error);
       throw error;
     }
   }
@@ -318,7 +318,6 @@ class BorderXClient {
         })
       });
     } catch (error) {
-      console.error('Error logging form fill event:', error);
       // Non-critical error, don't throw
     }
   }
@@ -348,7 +347,6 @@ class BorderXClient {
         })
       });
     } catch (error) {
-      console.error('Error logging form event:', error);
       // Don't throw the error to avoid disrupting the main flow
     }
   }

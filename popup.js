@@ -153,20 +153,30 @@ document.addEventListener('DOMContentLoaded', function() {
       window.borderXClient.fetchFormData(applicationId)
         .then(formData => {
           console.log('Form data loaded successfully!');
-          console.log('Form data structure:', Object.keys(formData));
           
           // Store the form data in Chrome storage
           chrome.storage.local.set({ 
             currentFormData: formData,
             currentApplicationId: applicationId
           }, function() {
-            console.log('Form data saved to Chrome storage');
             showStatus('Form data loaded successfully!', 'success');
           });
         })
         .catch(error => {
+          // Log the technical error for debugging
           console.error('Error loading form data:', error);
-          showStatus(`Error: ${error.message}`, 'error');
+          
+          // Show user-friendly error message
+          // The error message is already user-friendly from supabase-client.js
+          showStatus(error.message, 'error');
+          
+          // If it's an auth error, redirect to login
+          if (error.message.includes('session has expired')) {
+            chrome.storage.local.remove(['authToken', 'userInfo'], function() {
+              loginContainer.style.display = 'block';
+              mainContainer.style.display = 'none';
+            });
+          }
         });
     });
     
