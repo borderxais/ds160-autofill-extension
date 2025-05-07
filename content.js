@@ -413,11 +413,9 @@ async function fillFormSection(section, clientData) {
         continue;
       }
       
-      const filled = fillField(field, value, mapping);
-      if (filled) {
-        console.log(`Filled field ${mapping.dbPath} with value:`, value);
-        filledCount++;
-      }
+      fillField(field, value, mapping);
+      console.log(`Filled field ${mapping.dbPath} with value:`, value);
+      filledCount++;
       
       // Handle related fields (like fullNameNative when fullNameNative_na is false)
       if (mapping.relatedFields) {
@@ -437,11 +435,9 @@ async function fillFormSection(section, clientData) {
             continue;
           }
           
-          const relatedFilled = fillField(relatedFieldElement, relatedValue, relatedField);
-          if (relatedFilled) {
-            console.log(`Filled related field ${relatedField.dbPath} with value:`, relatedValue);
-            filledCount++;
-          }
+          fillField(relatedFieldElement, relatedValue, relatedField);
+          console.log(`Filled related field ${relatedField.dbPath} with value:`, relatedValue);
+          filledCount++;
         }
       }
     } catch (error) {
