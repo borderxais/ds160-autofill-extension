@@ -3,6 +3,11 @@
     "name": "DS-160 Autofill Helper",
     "version": "1.0",
     "description": "Automatically fills DS-160 form fields with client data",
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    },
     "permissions": [
       "storage",
       "activeTab",
@@ -29,4 +34,4 @@
         "js": ["content.js"]
       }
     ]
-  }
+}
