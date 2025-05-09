@@ -10,7 +10,7 @@
     ],
     "host_permissions": [
       "https://ceac.state.gov/*",
-      "http://localhost:5000/*"
+      "https://visasupport-dot-overseabiz-453023.wl.r.appspot.com/*"
     ],
     "action": {
       "default_popup": "popup.html",

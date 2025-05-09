@@ -1,10 +1,10 @@
 // This file handles all interactions with the BorderX backend API
 
 // Base URL for the BorderX API
-const API_BASE_URL = 'http://localhost:5000/api';
+// const API_BASE_URL = 'http://localhost:5000/api';
 
 // For production
-// const API_BASE_URL = 'https://visasupport-dot-overseabiz-453023.wl.r.appspot.com/api';
+const API_BASE_URL = 'https://visasupport-dot-overseabiz-453023.wl.r.appspot.com/api';
 
 /**
  * BorderXClient class for handling authentication and data operations
