@@ -18,17 +18,23 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         sendResponse({ success: false, error: 'Could not detect form section' });
         return true;
       }
-      
+
+      let result = fillFormSection(currentSection, clientData);
       // Fill the fields for the current section
-      const result = fillFormSection(currentSection, clientData);
-      
-      // Send response back to popup
+      setTimeout(() => {
+        result = fillFormSection(currentSection, clientData);
+        // Send response back to popup
+        
+      }, 1000);
+
       sendResponse({ 
         success: true, 
         message: `Filled ${result.filledCount} fields in the ${currentSection} section`,
         section: currentSection,
         filledCount: result.filledCount
       });
+      
+      
     } catch (error) {
       console.error('Error filling form:', error);
       sendResponse({ success: false, error: error.message });
@@ -218,7 +224,7 @@ function fillField(field, value, mapping) {
     
     return true;
   } catch (error) {
-    console.error('Error filling field:', error);
+    console.log('Error filling field:', error);
     return false;
   }
 }
@@ -296,16 +302,27 @@ function fillRadioField(field, value, mapping) {
     if (radioButtons.length > 0) {
       // Try to find by value first
       for (const radio of radioButtons) {
+        
         if (radio.value === selectValue) {
-          radio.checked = true;
-          radio.dispatchEvent(new Event('change', { bubbles: true }));
           
-          // Trigger onclick if it exists
-          if (radio.onclick) {
-            try {
-              radio.onclick();
-            } catch (e) {}
-          }
+          // setTimeout(() => {
+          //   const clickEvent = new MouseEvent('click', {
+          //     'view': window,
+          //     'bubbles': true,
+          //     'cancelable': true,
+          //     'clientX': radio.getBoundingClientRect().left + (Math.random() * radio.offsetWidth),
+          //     'clientY': radio.getBoundingClientRect().top + (Math.random() * radio.offsetHeight)
+          //   });
+          //   radio.dispatchEvent(clickEvent);
+          // }, 200);
+          setTimeout(() => {
+            radio.click();
+          }, 500);
+          // radio.checked = true;
+          // radio.dispatchEvent(new Event('change', { bubbles: true }));
+          console.log('Radio button:', radio.value);
+          console.log('selectValue:', selectValue);
+ 
           return true;
         }
       }
