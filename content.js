@@ -420,7 +420,10 @@ async function fillFormSection(section, clientData) {
   // Process each field mapping
   for (const mapping of mappings) {
     try {
-      const value = getValueFromClientData(clientData, mapping.dbPath);
+      let value = getValueFromClientData(clientData, mapping.dbPath);
+      if (mapping.valueExtractor) {
+        value = mapping.valueExtractor(clientData);
+      }
       if (value === null || value === undefined) {
         continue;
       }
@@ -442,7 +445,10 @@ async function fillFormSection(section, clientData) {
             continue;
           }
           
-          const relatedValue = getValueFromClientData(clientData, relatedField.dbPath);
+          let relatedValue = getValueFromClientData(clientData, relatedField.dbPath);
+          if (relatedField.valueExtractor) {
+            relatedValue = relatedField.valueExtractor(clientData);
+          }
           if (relatedValue === null || relatedValue === undefined) {
             continue;
           }
@@ -493,20 +499,15 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_FULL_NAME_NATIVE_NA' }
         ],
-        fieldType: 'checkbox',
-        // Add special handling for the native name text field
-        relatedFields: [
-          {
-            dbPath: 'fullNameNative',
-            selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_FULL_NAME_NATIVE' },
-            fallbackSelectors: [
-              { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_FULL_NAME_NATIVE' }
-            ],
-            fieldType: 'text',
-            // Only fill this field if fullNameNative_na is not present in the data
-            condition: (data) => data.fullNameNative_na === undefined || data.fullNameNative_na === null
-          }
-        ]
+        fieldType: 'checkbox'
+      },
+      {
+        dbPath: 'fullNameNative',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_FULL_NAME_NATIVE' },
+        fallbackSelectors: [
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_FULL_NAME_NATIVE' }
+        ],
+        fieldType: 'text'
       },
       {
         dbPath: 'hasOtherNames',
@@ -535,6 +536,52 @@ function getFieldMappings(section) {
         }
       },
       {
+        dbPath: 'otherNames',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_DListAlias_ctl00_tbxSURNAME' },
+        fallbackSelectors: [
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$DListAlias$ctl00$tbxSURNAME' }
+        ],
+        fieldType: 'text',
+        valueExtractor: (data) => {
+          if (data.otherNames && data.otherNames.length > 0 && data.otherNames[0].surname) {
+            return data.otherNames[0].surname;
+          }
+          return null;
+        }
+      },
+      {
+        dbPath: 'otherNames',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_DListAlias_ctl00_tbxGIVEN_NAME' },
+        fallbackSelectors: [
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$DListAlias$ctl00$tbxGIVEN_NAME' }
+        ],
+        fieldType: 'text',
+        valueExtractor: (data) => {
+          if (data.otherNames && data.otherNames.length > 0 && data.otherNames[0].givenName) {
+            return data.otherNames[0].givenName;
+          }
+          return null;
+        }
+      },
+      {
+        dbPath: 'telecode.surname',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_TelecodeSURNAME' },
+        fallbackSelectors: [
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_TelecodeSURNAME' }
+        ],
+        fieldType: 'text',
+        maxLength: 20
+      },
+      {
+        dbPath: 'telecode.givenName',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_TelecodeGIVEN_NAME' },
+        fallbackSelectors: [
+          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_TelecodeGIVEN_NAME' }
+        ],
+        fieldType: 'text',
+        maxLength: 20
+      },
+      {
         dbPath: 'gender',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_GENDER' },
         fallbackSelectors: [
@@ -555,7 +602,7 @@ function getFieldMappings(section) {
         fieldType: 'select'
       },
       {
-        dbPath: 'dobDay',
+        dbPath: 'dob.day',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBDay' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBDay' }
@@ -563,7 +610,7 @@ function getFieldMappings(section) {
         fieldType: 'select'
       },
       {
-        dbPath: 'dobMonth',
+        dbPath: 'dob.month',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBMonth' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBMonth' }
@@ -571,7 +618,7 @@ function getFieldMappings(section) {
         fieldType: 'select'
       },
       {
-        dbPath: 'dobYear',
+        dbPath: 'dob.year',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxDOBYear' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxDOBYear' }
