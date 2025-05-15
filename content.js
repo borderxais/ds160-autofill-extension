@@ -1,45 +1,50 @@
 // Listen for messages from the popup
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   if (request.action === 'ping') {
     // Just respond to confirm content script is loaded
     sendResponse({ loaded: true });
     return true;
   }
-  
+
   if (request.action === 'fillForm') {
     try {
       // Get the client data
       const clientData = request.clientData;
-      
+
       // Detect which page of the DS-160 form we're on
       const currentSection = detectCurrentFormSection();
-      
+
       if (!currentSection) {
         sendResponse({ success: false, error: 'Could not detect form section' });
         return true;
       }
 
       let result = fillFormSection(currentSection, clientData);
-      // Fill the fields for the current section
-      setTimeout(() => {
-        result = fillFormSection(currentSection, clientData);
-        // Send response back to popup
-        
-      }, 1000);
+      // // Fill the fields for the current section
+      // setTimeout(() => {
+      //   result = fillFormSection(currentSection, clientData);
+      //   // Send response back to popup
 
-      sendResponse({ 
-        success: true, 
+      // }, 1000);
+      // setTimeout(() => {
+      //   result = fillFormSection(currentSection, clientData);
+      //   // Send response back to popup
+
+      // }, 2000);
+
+      sendResponse({
+        success: true,
         message: `Filled ${result.filledCount} fields in the ${currentSection} section`,
         section: currentSection,
         filledCount: result.filledCount
       });
-      
-      
+
+
     } catch (error) {
       console.error('Error filling form:', error);
       sendResponse({ success: false, error: error.message });
     }
-    
+
     return true; // Required to use sendResponse asynchronously
   }
 });
@@ -68,7 +73,7 @@ function detectCurrentFormSection() {
   // Get the page title from the DS-160 form
   const pageTitle = document.title.trim();
   console.log('Current DS-160 page title:', pageTitle);
-  
+
   // Find our section name that corresponds to this DS-160 page
   for (const [ds160Title, sectionName] of Object.entries(DS160_PAGE_TO_SECTION_MAP)) {
     if (pageTitle.toLowerCase().includes(ds160Title.toLowerCase())) {
@@ -76,7 +81,7 @@ function detectCurrentFormSection() {
       return sectionName;
     }
   }
-  
+
   // If no exact match found, try matching by URL
   const url = window.location.href.toLowerCase();
   if (url.includes('complete_personal.aspx')) {
@@ -86,7 +91,7 @@ function detectCurrentFormSection() {
     console.log('Matched section by URL: personalInfo2');
     return 'personalInfo2';
   }
-  
+
   console.warn('Could not determine section from page title:', pageTitle);
   return null;
 }
@@ -102,13 +107,13 @@ function getValueFromClientData(clientData, dbPath) {
       console.warn('Could not determine current section');
       return null;
     }
-    
+
     // Check if we have data for this section
     if (!clientData[section]) {
       console.warn(`No data found for section: ${section}`);
       return null;
     }
-    
+
     // Get the field value from the section using dot notation path
     const value = getValueByPath(clientData[section], dbPath);
     console.log(`Looking for ${dbPath} in section ${section}:`, value);
@@ -135,11 +140,12 @@ function getValueByPath(obj, path) {
  * Finds a form field element
  */
 function findField(mapping) {
+  console.log("findField: ", mapping);
   const { selector, fallbackSelectors } = mapping;
-  
+
   // Try primary selector
   let field = findFieldBySelector(selector);
-  
+
   // If not found, try fallback selectors
   if (!field && fallbackSelectors) {
     for (const fallbackSelector of fallbackSelectors) {
@@ -147,7 +153,7 @@ function findField(mapping) {
       if (field) break;
     }
   }
-  
+
   return field;
 }
 
@@ -158,10 +164,10 @@ function findFieldBySelector(selector) {
   switch (selector.type) {
     case 'id':
       return document.getElementById(selector.value);
-      
+
     case 'name':
       return document.querySelector(`[name="${selector.value}"]`);
-      
+
     case 'xpath':
       const result = document.evaluate(
         selector.value,
@@ -171,7 +177,7 @@ function findFieldBySelector(selector) {
         null
       );
       return result.singleNodeValue;
-      
+
     default:
       return null;
   }
@@ -180,30 +186,30 @@ function findFieldBySelector(selector) {
 /**
  * Fills a form field with a value
  */
-function fillField(field, value, mapping) {
+async function fillField(field, value, mapping) {
   try {
     const fieldType = mapping.fieldType || detectFieldType(field);
-    
+
     switch (fieldType) {
       case 'text':
         field.value = value;
         field.dispatchEvent(new Event('input', { bubbles: true }));
         field.dispatchEvent(new Event('change', { bubbles: true }));
         break;
-        
+
       case 'select':
         fillSelectField(field, value);
         break;
-        
+
       case 'radio':
         fillRadioField(field, value, mapping);
         break;
-        
+
       case 'checkbox':
         field.checked = Boolean(value);
         field.dispatchEvent(new Event('change', { bubbles: true }));
         break;
-        
+
       case 'date':
         // Format date as needed
         if (typeof value === 'string' && value.includes('-')) {
@@ -216,12 +222,27 @@ function fillField(field, value, mapping) {
         field.value = value;
         field.dispatchEvent(new Event('change', { bubbles: true }));
         break;
-        
+
+      case 'array':
+        console.log("filling array: ", value);
+        // from input to its parent table that contains all small tables of each array object
+        const tableField = field.parentNode.parentNode.parentNode.parentNode.parentNode;
+        const tableRows = tableField.querySelectorAll('tr');
+        for (let i = tableRows.length; i < value.length; i++) {
+          //add another field, only when value.length > 1
+          await addAnotherField(field.parentNode.parentNode.parentNode);
+          // wait for the new field to be added
+          await delay(200);
+        }
+
+        await fillArrayField(field, value, mapping);
+
+        break;
       default:
         field.value = value;
         field.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    
+
     return true;
   } catch (error) {
     console.log('Error filling field:', error);
@@ -229,26 +250,97 @@ function fillField(field, value, mapping) {
   }
 }
 
+async function fillArrayField(field, value, mapping) {
+  await delay(500);
+  field=findField(mapping);
+  const tableField = field.parentNode.parentNode.parentNode.parentNode.parentNode;
+  console.log("tableField: ", tableField);
+  console.log("mapping: ", mapping);
+  const tableRows = tableField.querySelectorAll('tr');
+  console.log("tableRows: ", tableRows);
+  for (let i = 0; i < tableRows.length; i++) {
+    // the number of objects, e.g. how many other names
+    const tableRow = tableRows[i];
+    const inputFields = tableRow.querySelectorAll('input');
+    for (let j = 0; j < inputFields.length; j++) {
+      // the number of attributes in a object, e.g. surname & given name
+      const inputField = inputFields[j];
+      inputField.value = value[i][j];
+      console.log("inputField: ", inputField, value[i][j]);
+      inputField.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+}
+
+// assistant function of add another field
+// Manually run the same logic as the <a> tag
+function fireAliasInsertButton(element) {
+  try {
+    if (typeof ValidNavigation === 'function') {
+      ValidNavigation();  // Safe to call even if it's a no-op
+    }
+    if (typeof setDirty === 'function') {
+      setDirty();
+      setDirty();
+      setDirty();
+      setDirty();
+    }
+
+    __doPostBack(element.id.replace(/_/g, '$'), '');
+  } catch (e) {
+    console.error("Failed to trigger Add Another logic", e);
+  }
+}
+
+// click add one button
+async function addAnotherField(field) {
+  addone_button = field.querySelector(".addone");
+  addone_link = field.querySelector("a")
+  await delay(400);
+  // Inject __doPostBack only if missing (safe for CSP)
+  if (typeof __doPostBack === 'undefined') {
+    window.__doPostBack = function (eventTarget, eventArgument) {
+      const form = document.forms[0];
+      if (!form) return;
+
+      const eventTargetInput = form.querySelector('[name="__EVENTTARGET"]');
+      const eventArgumentInput = form.querySelector('[name="__EVENTARGUMENT"]');
+
+      if (eventTargetInput && eventArgumentInput) {
+        eventTargetInput.value = eventTarget;
+        eventArgumentInput.value = eventArgument;
+
+        // Try firing the submit event, some pages override it for async/AJAX postback
+        const evt = new Event("submit", { bubbles: true, cancelable: true });
+        form.dispatchEvent(evt);
+      }
+    };
+  }
+  fireAliasInsertButton(addone_link);
+  await delay(800);
+  console.log("add another field");
+}
+
 /**
  * Detects the type of form field
  */
 function detectFieldType(field) {
   if (!field) return null;
-  
+
   const tagName = field.tagName.toLowerCase();
-  
+
   if (tagName === 'input') {
     return field.type || 'text';
   }
-  
+
   if (tagName === 'select') {
     return 'select';
   }
-  
+
   if (tagName === 'textarea') {
     return 'text';
   }
-  
+
   return 'text';
 }
 
@@ -264,7 +356,7 @@ function fillSelectField(field, value) {
       return;
     }
   }
-  
+
   // Then try text content match
   for (let i = 0; i < field.options.length; i++) {
     if (field.options[i].text === value) {
@@ -273,7 +365,7 @@ function fillSelectField(field, value) {
       return;
     }
   }
-  
+
   // Then try case-insensitive match
   const lowerValue = String(value).toLowerCase();
   for (let i = 0; i < field.options.length; i++) {
@@ -284,91 +376,81 @@ function fillSelectField(field, value) {
     }
   }
 }
-
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 /**
  * Fills a radio button field
  */
-function fillRadioField(field, value, mapping) {
+async function fillRadioField(field, value, mapping) {
   // Ensure value is exactly 'Y' or 'N'
   const selectValue = value === 'Y' ? 'Y' : 'N';
-  
+
   // APPROACH 1: Find by name and value - most reliable for DS-160
   const name = mapping.selector.value;
   if (typeof name === 'string') {
     // For ASP.NET forms, we need to escape $ in the selector
     const nameForQuery = name.replace(/\$/g, '\\$');
     const radioButtons = document.querySelectorAll(`input[type="radio"][name="${nameForQuery}"]`);
-    
+
     if (radioButtons.length > 0) {
       // Try to find by value first
       for (const radio of radioButtons) {
-        
+
         if (radio.value === selectValue) {
-          
-          // setTimeout(() => {
-          //   const clickEvent = new MouseEvent('click', {
-          //     'view': window,
-          //     'bubbles': true,
-          //     'cancelable': true,
-          //     'clientX': radio.getBoundingClientRect().left + (Math.random() * radio.offsetWidth),
-          //     'clientY': radio.getBoundingClientRect().top + (Math.random() * radio.offsetHeight)
-          //   });
-          //   radio.dispatchEvent(clickEvent);
-          // }, 200);
-          setTimeout(() => {
-            radio.click();
-          }, 500);
+          radio.click();
+
           // radio.checked = true;
           // radio.dispatchEvent(new Event('change', { bubbles: true }));
-          console.log('Radio button:', radio.value);
+          console.log('Radio button:', radio);
           console.log('selectValue:', selectValue);
- 
+
           return true;
         }
       }
-      
+
       // If not found by value, use position (0=Yes, 1=No)
       const index = selectValue === 'Y' ? 0 : 1;
       if (index < radioButtons.length) {
         radioButtons[index].checked = true;
         radioButtons[index].dispatchEvent(new Event('change', { bubbles: true }));
-        
+
         if (radioButtons[index].onclick) {
           try {
             radioButtons[index].onclick();
-          } catch (e) {}
+          } catch (e) { }
         }
         return true;
       }
     }
   }
-  
+
   // APPROACH 2: Try direct ID selection for DS-160 form pattern
   if (typeof mapping.selector.value === 'string' && mapping.selector.value.includes('$')) {
     const baseId = mapping.selector.value.replace(/\$/g, '_');
     const radioId = selectValue === 'Y' ? `${baseId}_0` : `${baseId}_1`;
-    
+
     const radioToSelect = document.getElementById(radioId);
     if (radioToSelect) {
       radioToSelect.checked = true;
       radioToSelect.dispatchEvent(new Event('change', { bubbles: true }));
-      
+
       if (radioToSelect.onclick) {
         try {
           radioToSelect.onclick();
-        } catch (e) {}
+        } catch (e) { }
       }
       return true;
     }
   }
-  
+
   // APPROACH 3: Use fallback selectors if available
   if (mapping.fallbackSelectors && mapping.fallbackSelectors.length > 0) {
     const index = selectValue === 'Y' ? 0 : 1;
     if (index < mapping.fallbackSelectors.length) {
       const fallbackSelector = mapping.fallbackSelectors[index];
       let radioElement = null;
-      
+
       if (fallbackSelector.type === 'id') {
         radioElement = document.getElementById(fallbackSelector.value);
       } else if (fallbackSelector.type === 'name') {
@@ -383,21 +465,21 @@ function fillRadioField(field, value, mapping) {
         );
         radioElement = result.singleNodeValue;
       }
-      
+
       if (radioElement) {
         radioElement.checked = true;
         radioElement.dispatchEvent(new Event('change', { bubbles: true }));
-        
+
         if (radioElement.onclick) {
           try {
             radioElement.onclick();
-          } catch (e) {}
+          } catch (e) { }
         }
         return true;
       }
     }
   }
-  
+
   return false;
 }
 
@@ -407,40 +489,54 @@ function fillRadioField(field, value, mapping) {
 async function fillFormSection(section, clientData) {
   console.log(`Filling section: ${section}`);
   console.log('Client data:', clientData);
-  
+
   let filledCount = 0;
-  
+
   // Get field mappings for this section
   const mappings = getFieldMappings(section);
   if (!mappings) {
     console.warn(`No mappings found for section: ${section}`);
     return { filledCount: 0 };
   }
-  
+
   // Process each field mapping
   for (const mapping of mappings) {
     try {
+
       let value = getValueFromClientData(clientData, mapping.dbPath);
       if (mapping.valueExtractor) {
-        value = mapping.valueExtractor(clientData);
+        value = mapping.valueExtractor(value);
+        console.log("value extractor: ", value);
       }
       if (value === null || value === undefined) {
         continue;
       }
-      
-      const field = findField(mapping);
+
+      let field = findField(mapping);
+
       if (!field) {
+        await delay(400);
+        console.log("field not found, retrying...")
+        field = findField(mapping);
+      }
+
+      if (!field) {
+        console.log("field not found, skipping...")
         continue;
       }
-      
-      fillField(field, value, mapping);
+
+      // DO NOT CHANGE; MAKE FORM FILLED FIELD BY FIELD.
+      await delay(200);
+      await fillField(field, value, mapping);
       console.log(`Filled field ${mapping.dbPath} with value:`, value);
       filledCount++;
+
+
     } catch (error) {
       console.error(`Error filling field ${mapping.dbPath}:`, error);
     }
   }
-  
+
   return { filledCount };
 }
 
@@ -501,24 +597,10 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$DListAlias$ctl00$tbxSURNAME' }
         ],
-        fieldType: 'text',
+        fieldType: 'array',
         valueExtractor: (data) => {
-          if (data.otherNames && data.otherNames.length > 0 && data.otherNames[0].surname) {
-            return data.otherNames[0].surname;
-          }
-          return null;
-        }
-      },
-      {
-        dbPath: 'otherNames',
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_DListAlias_ctl00_tbxGIVEN_NAME' },
-        fallbackSelectors: [
-          { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$DListAlias$ctl00$tbxGIVEN_NAME' }
-        ],
-        fieldType: 'text',
-        valueExtractor: (data) => {
-          if (data.otherNames && data.otherNames.length > 0 && data.otherNames[0].givenName) {
-            return data.otherNames[0].givenName;
+          if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+            return data.map(entry => [entry.givenName, entry.surname]);
           }
           return null;
         }
@@ -631,7 +713,7 @@ function getFieldMappings(section) {
         fieldType: 'select'
       }
     ],
-    
+
     personalInfo2: [
       {
         dbPath: 'nationality',
@@ -735,7 +817,7 @@ function getFieldMappings(section) {
         fieldType: 'checkbox'
       }
     ],
-    
+
     // Additional mappings for other sections
     travelCompanions: [
       {
@@ -840,7 +922,7 @@ function getFieldMappings(section) {
         ],
         fieldType: 'select'
       },
-      
+
       // Mailing Address Same as Home Address
       {
         dbPath: 'isMailingAddressSame',
@@ -855,7 +937,7 @@ function getFieldMappings(section) {
           'N': '1'
         }
       },
-      
+
       // Mailing Address fields (only used when isMailingAddressSame = "N")
       {
         dbPath: 'mailingAddressStreet1',
@@ -921,7 +1003,7 @@ function getFieldMappings(section) {
         ],
         fieldType: 'select'
       },
-      
+
       // Phone Information
       {
         dbPath: 'primaryPhone',
@@ -976,7 +1058,7 @@ function getFieldMappings(section) {
           'N': '1'
         }
       },
-      
+
       // Email Address
       {
         dbPath: 'emailAddress',
@@ -999,7 +1081,7 @@ function getFieldMappings(section) {
           'N': '1'
         }
       },
-      
+
       // Social Media Platform
       {
         dbPath: 'socialMediaPlatform',
@@ -1043,7 +1125,7 @@ function getFieldMappings(section) {
         }
       }
     ]
-};
-  
+  };
+
   return mappings[section] || [];
 }
