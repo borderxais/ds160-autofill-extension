@@ -54,10 +54,10 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
  */
 const DS160_PAGE_TO_SECTION_MAP = {
   'Personal Information 1': 'personalInfo1',
-  'Personal Information 2': 'personalInfo2'
+  'Personal Information 2': 'personalInfo2',
   // 'Address and Phone Information': 'contactInfo',
   // 'Passport Information': 'passportInfo',
-  // 'Travel Information': 'travelInfo',
+  'Travel Information': 'travelInfo',
   // 'Travel Companions': 'travelCompanions',
   // 'Previous U.S. Travel Information': 'previousTravel',
   // 'U.S. Contact Information': 'usContact',
@@ -90,6 +90,9 @@ function detectCurrentFormSection() {
   } else if (url.includes('complete_personalcont.aspx')) {
     console.log('Matched section by URL: personalInfo2');
     return 'personalInfo2';
+  } else if (url.includes('complete_travel.aspx')) {
+    console.log('Matched section by URL: travelInfo');
+    return 'travelInfo';
   }
 
   console.warn('Could not determine section from page title:', pageTitle);
@@ -187,6 +190,11 @@ function findFieldBySelector(selector) {
  * Fills a form field with a value
  */
 async function fillField(field, value, mapping) {
+  if(mapping.action === 'addAnthoerRow') {
+    // add another ROW, input addone parentNode.
+    await addAnotherField(field.parentNode.parentNode.parentNode);
+    await delay(200);
+  }
   try {
     const fieldType = mapping.fieldType || detectFieldType(field);
 
@@ -252,24 +260,25 @@ async function fillField(field, value, mapping) {
 
 async function fillArrayField(field, value, mapping) {
   await delay(500);
-  field=findField(mapping);
-  const tableField = field.parentNode.parentNode.parentNode.parentNode.parentNode;
+  field = findField(mapping);
+  let tableField = field.parentNode.parentNode.parentNode.parentNode.parentNode;
   console.log("tableField: ", tableField);
-  console.log("mapping: ", mapping);
-  const tableRows = tableField.querySelectorAll('tr');
+  let tableRows = tableField.querySelectorAll('tr');
   console.log("tableRows: ", tableRows);
+  console.log("value: ", value);
   for (let i = 0; i < tableRows.length; i++) {
     // the number of objects, e.g. how many other names
     const tableRow = tableRows[i];
-    const inputFields = tableRow.querySelectorAll('input');
+    let inputFields = tableRow.querySelectorAll('input');
     for (let j = 0; j < inputFields.length; j++) {
       // the number of attributes in a object, e.g. surname & given name
       const inputField = inputFields[j];
       inputField.value = value[i][j];
-      console.log("inputField: ", inputField, value[i][j]);
       inputField.dispatchEvent(new Event('change', { bubbles: true }));
     }
   }
+
+
 }
 
 // assistant function of add another field
@@ -493,7 +502,7 @@ async function fillFormSection(section, clientData) {
   let filledCount = 0;
 
   // Get field mappings for this section
-  const mappings = getFieldMappings(section);
+  const mappings = getFieldMappings(section, clientData);
   if (!mappings) {
     console.warn(`No mappings found for section: ${section}`);
     return { filledCount: 0 };
@@ -543,7 +552,7 @@ async function fillFormSection(section, clientData) {
 /**
  * Gets field mappings for a specific form section
  */
-function getFieldMappings(section) {
+function getFieldMappings(section, clientData) {
   const mappings = {
     personalInfo1: [
       {
@@ -568,7 +577,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_FULL_NAME_NATIVE_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'fullNameNative',
@@ -694,7 +704,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_POB_ST_PROVINCE_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'birthState',
@@ -763,7 +774,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_NATIONAL_ID_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'usSSN.part1',
@@ -798,7 +810,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_SSN_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'usTaxId',
@@ -814,10 +827,51 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_TAX_ID_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       }
     ],
-
+    travelInfo: (() => {
+      if( !clientData['travelInfo'] ||clientData['travelInfo'].length === 0) {
+        return [];
+      }
+      const arr = clientData['travelInfo']['travelPurposes']|| [];
+      return arr.flatMap((entry, idx) => {
+        const baseName = `ctl00$SiteContentPlaceHolder$FormView1$dlPrincipalAppTravel$ctl0${idx}$`;
+        const baseId = baseName.replace(/\$/g, '_');
+        const block = [];
+        if (idx > 0) block.push({ action: 'addAnotherRow' });
+        block.push({
+          dbPath: `travelPurposes.${idx}.visaClass`,
+          selector: { type: 'name', value: `${baseName}ddlPurposeOfTrip` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}ddlPurposeOfTrip` }],
+          fieldType: 'select',
+          
+        });
+        block.push({
+          dbPath: `travelPurposes.${idx}.specificPurpose`,
+          selector: { type: 'name', value: `${baseName}ddlOtherPurpose` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}ddlOtherPurpose` }],
+          fieldType: 'select',
+          
+        });
+        block.push({
+          dbPath: `travelPurposes.${idx}.principalApplicantSurname`,
+          selector: { type: 'name', value: `${baseName}tbxPrincipleAppSurname` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}tbxPrincipleAppSurname` }],
+          fieldType: 'text',
+          
+        });
+        block.push({
+          dbPath: `travelPurposes.${idx}.principalApplicantGivenName`,
+          selector: { type: 'name', value: `${baseName}tbxPrincipleAppGivenName` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}tbxPrincipleAppGivenName` }],
+          fieldType: 'text',
+          
+        });
+        return block;
+      });
+    })(),
     // Additional mappings for other sections
     travelCompanions: [
       {
@@ -896,7 +950,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_ADDR_STATE_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'homeAddressZipCode',
@@ -912,7 +967,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_ADDR_POSTAL_CD_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'homeAddressCountry',
@@ -977,7 +1033,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexMAILING_ADDR_STATE_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'mailingAddressZipCode',
@@ -993,7 +1050,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexMAILING_ADDR_POSTAL_CD_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'mailingAddressCountry',
@@ -1027,7 +1085,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_MOBILE_TEL_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'workPhone',
@@ -1043,7 +1102,8 @@ function getFieldMappings(section) {
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexAPP_BUS_TEL_NA' }
         ],
-        fieldType: 'checkbox'
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
       },
       {
         dbPath: 'hasOtherPhones',
