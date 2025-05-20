@@ -243,9 +243,11 @@ function findFieldBySelector(selector) {
  * Fills a form field with a value
  */
 async function fillField(field, value, mapping) {
-  if (mapping.action === 'addAnthoerRow') {
+  if (mapping.action === 'addAnotherRow') {
     // add another ROW, input addone parentNode.
-    await addAnotherField(field.parentNode.parentNode.parentNode);
+
+    console.log("add another row", field);
+    await addAnotherField(field.parentNode.parentNode.parentNode, mapping.id, mapping);
     await delay(200);
   }
   try {
@@ -255,7 +257,7 @@ async function fillField(field, value, mapping) {
       case 'text':
         if (mapping.action === 'wait') {
           await delay(500);
-          field=findField(mapping);
+          field = findField(mapping);
         }
         field.focus();
         field.value = value;
@@ -278,8 +280,10 @@ async function fillField(field, value, mapping) {
         break;
 
       case 'checkbox':
-        field.checked = Boolean(value);
-        field.dispatchEvent(new Event('change', { bubbles: true }));
+        do {
+          field.focus();
+          field.click();  // Ensures onclick is fired
+        } while (Boolean(value) !== field.checked);
         break;
 
       case 'date':
@@ -300,11 +304,11 @@ async function fillField(field, value, mapping) {
         // from input to its parent table that contains all small tables of each array object
         const tableField = field.parentNode.parentNode.parentNode.parentNode.parentNode;
         const tableRows = tableField.querySelectorAll('tr');
-        for (let i = tableRows.length; i < value.length; i++) {
+        for (let i = tableRows.length - 1; i < value.length - 1; i++) {
           //add another field, only when value.length > 1
-          await addAnotherField(field.parentNode.parentNode.parentNode);
+          await addAnotherField(field.parentNode.parentNode.parentNode.parentNode.parentNode, i, mapping);
           // wait for the new field to be added
-          await delay(200);
+
         }
 
         await fillArrayField(field, value, mapping);
@@ -364,14 +368,53 @@ function fireAliasInsertButton(element) {
     console.error("Failed to trigger Add Another logic", e);
   }
 }
+function manualPostBack(eventTarget, eventArgument) {
+  const form = document.forms[0];
+  if (!form) {
+    console.error("No form found");
+    return;
+  }
 
+  const createOrUpdateHidden = (name, value) => {
+    let input = form.querySelector(`[name="${name}"]`);
+    if (!input) {
+      input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      form.appendChild(input);
+    }
+    input.value = value;
+  };
+
+  createOrUpdateHidden("__EVENTTARGET", eventTarget);
+  createOrUpdateHidden("__EVENTARGUMENT", eventArgument);
+
+  // Also include __VIEWSTATE and __EVENTVALIDATION if present
+  const viewState = form.querySelector('[name="__VIEWSTATE"]');
+  const eventValidation = form.querySelector('[name="__EVENTVALIDATION"]');
+  if (!viewState || !eventValidation) {
+    console.warn("Missing __VIEWSTATE or __EVENTVALIDATION. Postback might fail.");
+  }
+
+  form.submit();  // Native form submission
+}
 // click add one button
-async function addAnotherField(field) {
-  addone_button = field.querySelector(".addone");
-  addone_link = field.querySelector("a")
-  await delay(400);
+/**
+ * 
+ * @param {*} field: whole table <tbody>
+ * @param {*} idx : index of add one button, start with 0
+ * @param {*} mapping : mapping of the first input field of first tr row
+ */
+async function addAnotherField(field, idx, mapping) {
+
+  let addone_button = field.querySelectorAll(".addone")[idx];
+  let addone_link = addone_button.querySelector("a")
+  const currentRows = field.querySelectorAll(".addone").length;
+
+  await delay(600);
   // Inject __doPostBack only if missing (safe for CSP)
   if (typeof __doPostBack === 'undefined') {
+    console.log("injecting __doPostBack", typeof __doPostBack);
     window.__doPostBack = function (eventTarget, eventArgument) {
       const form = document.forms[0];
       if (!form) return;
@@ -390,8 +433,49 @@ async function addAnotherField(field) {
     };
   }
   fireAliasInsertButton(addone_link);
-  await delay(800);
-  console.log("add another field");
+  await delay(1000);
+
+  field = findField(mapping).parentNode.parentNode.parentNode;
+  whole_table = field.parentNode.parentNode;
+  await delay(300);
+
+  console.log("whole_table: ", whole_table);
+  console.log("currentRows before check: ", currentRows);
+  console.log(whole_table.querySelectorAll(".addone"));
+
+  if (whole_table.querySelectorAll(".addone").length <= currentRows) {
+    console.log("add another field. second attempt ...", whole_table.querySelectorAll(".addone"), currentRows);
+
+    addone_button = whole_table.querySelectorAll(".addone")[idx];
+
+    console.log("addone_button: ", addone_button);
+    console.log("idx: ", idx);
+
+    addone_link = addone_button.querySelector("a")
+    const href = addone_link.getAttribute("href");
+    const match = href.match(/__doPostBack\(['"]([^'"]+)['"],\s*['"]([^'"]*)['"]\)/);
+    if (!match) {
+      console.error("Could not parse __doPostBack href:", href);
+      return;
+    }
+
+    const eventTarget = match[1];
+    const eventArgument = match[2];
+    console.log("Triggering __doPostBack with:", eventTarget, eventArgument);
+
+    manualPostBack(eventTarget, eventArgument);
+
+    // Wait for the new row to appear
+    await delay(1200);
+  } else {
+    console.log("add another field success");
+    return;
+  }
+
+  if (field.querySelectorAll(".addone").length <= currentRows) {
+    console.log("add another field failed");
+    return;
+  }
 }
 
 /**
@@ -576,12 +660,14 @@ async function fillFormSection(section, clientData) {
   for (const mapping of mappings) {
     try {
 
+      console.log("filling field: ", mapping.action);
       let value = getValueFromClientData(clientData, mapping.dbPath);
       if (mapping.valueExtractor) {
         value = mapping.valueExtractor(value);
         console.log("value extractor: ", value);
       }
       if (value === null || value === undefined) {
+        console.log("value is null or undefined, skipping...")
         continue;
       }
 
@@ -788,17 +874,22 @@ function getFieldMappings(section, clientData) {
         fieldType: 'select'
       }
     ],
-
-    personalInfo2: [
-      {
+    personalInfo2: (() => {
+      if (!clientData['personalInfo2'] || clientData['personalInfo2'].length === 0) {
+        return [];
+      }
+      const arr = clientData['personalInfo2']['otherNationalities'] || [];
+      const perm_arr = clientData['personalInfo2']['permanentResidences'] || [];
+      let dynamic = [];
+      dynamic.push({
         dbPath: 'nationality',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlAPP_NATL' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlAPP_NATL' }
         ],
         fieldType: 'select'
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'hasOtherNationality',
         selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblAPP_OTH_NATL_IND' },
         fallbackSelectors: [
@@ -810,8 +901,8 @@ function getFieldMappings(section, clientData) {
           'Y': '0',
           'N': '1'
         }
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'isPermResOtherCountry',
         selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblPermResOtherCntryInd' },
         fallbackSelectors: [
@@ -823,16 +914,16 @@ function getFieldMappings(section, clientData) {
           'Y': '0',
           'N': '1'
         }
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'nationalIdNumber',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_NATIONAL_ID' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_NATIONAL_ID' }
         ],
         fieldType: 'text'
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'nationalIdNumber_na',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexAPP_NATIONAL_ID_NA' },
         fallbackSelectors: [
@@ -840,8 +931,8 @@ function getFieldMappings(section, clientData) {
         ],
         fieldType: 'checkbox',
         valueExtractor: value => value === undefined ? false : value
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'usSSN.part1',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SSN1' },
         fallbackSelectors: [
@@ -849,8 +940,8 @@ function getFieldMappings(section, clientData) {
         ],
         fieldType: 'text',
         maxLength: 3
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'usSSN.part2',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SSN2' },
         fallbackSelectors: [
@@ -858,8 +949,8 @@ function getFieldMappings(section, clientData) {
         ],
         fieldType: 'text',
         maxLength: 2
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'usSSN.part3',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SSN3' },
         fallbackSelectors: [
@@ -867,8 +958,8 @@ function getFieldMappings(section, clientData) {
         ],
         fieldType: 'text',
         maxLength: 4
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'usSSN_na',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexAPP_SSN_NA' },
         fallbackSelectors: [
@@ -876,16 +967,16 @@ function getFieldMappings(section, clientData) {
         ],
         fieldType: 'checkbox',
         valueExtractor: value => value === undefined ? false : value
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'usTaxId',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_TAX_ID' },
         fallbackSelectors: [
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxAPP_TAX_ID' }
         ],
         fieldType: 'text'
-      },
-      {
+      });
+      dynamic.push({
         dbPath: 'usTaxId_na',
         selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexAPP_TAX_ID_NA' },
         fallbackSelectors: [
@@ -893,8 +984,78 @@ function getFieldMappings(section, clientData) {
         ],
         fieldType: 'checkbox',
         valueExtractor: value => value === undefined ? false : value
-      }
-    ],
+      });
+      dynamic.push(...arr.flatMap((entry, idx) => {
+        let baseName = `ctl00$SiteContentPlaceHolder$FormView1$dtlOTHER_NATL$ctl0${idx}$`;
+        let baseId = baseName.replace(/\$/g, '_');
+        const block = [];
+        if (idx > 0) {
+          let baseName = `ctl00$SiteContentPlaceHolder$FormView1$dtlOTHER_NATL$ctl0${idx - 1}$`;
+          let baseId = baseName.replace(/\$/g, '_');
+          block.push({
+            dbPath: `otherNationalities.${idx - 1}.country`,
+            selector: { type: 'name', value: `${baseName}ddlOTHER_NATL` },
+            fallbackSelectors: [{ type: 'id', value: `${baseId}ddlOTHER_NATL` }],
+            fieldType: 'select',
+            action: 'addAnotherRow',
+            id: idx - 1,
+          });
+        }
+        block.push({
+          dbPath: `otherNationalities.${idx}.country`,
+          selector: { type: 'name', value: `${baseName}ddlOTHER_NATL` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}ddlOTHER_NATL` }],
+          fieldType: 'select',
+        });
+
+        block.push({
+          dbPath: `otherNationalities.${idx}.hasPassport`,
+          selector: { type: 'name', value: `${baseName}rblOTHER_PPT_IND` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}rblOTHER_PPT_IND_0` }, { type: 'id', value: `${baseId}rblOTHER_PPT_IND_1` }],
+          fieldType: 'radio',
+          valueMap: {
+            'Y': '0',
+            'N': '1'
+          }
+        });
+        block.push({
+          dbPath: `otherNationalities.${idx}.passportNumber`,
+          selector: { type: 'name', value: `${baseName}tbxOTHER_PPT_NUM` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}tbxOTHER_PPT_NUM` }],
+          fieldType: 'text',
+
+        });
+        return block;
+      }));
+
+      dynamic.push(...perm_arr.flatMap((entry, idx) => {
+        let baseName = `ctl00$SiteContentPlaceHolder$FormView1$dtlOthPermResCntry$ctl0${idx}$`;
+        let baseId = baseName.replace(/\$/g, '_');
+        const block = [];
+        if (idx > 0) {
+          let baseName = `ctl00$SiteContentPlaceHolder$FormView1$dtlOthPermResCntry$ctl0${idx - 1}$`;
+          let baseId = baseName.replace(/\$/g, '_');
+          block.push({
+            dbPath: `permanentResidences.${idx - 1}.country`,
+            selector: { type: 'name', value: `${baseName}ddlOthPermResCntry` },
+            fallbackSelectors: [{ type: 'id', value: `${baseId}ddlOthPermResCntry` }],
+            fieldType: 'select',
+            action: 'addAnotherRow',
+            id: idx - 1,
+          });
+        }
+        block.push({
+          dbPath: `permanentResidences.${idx}.country`,
+          selector: { type: 'name', value: `${baseName}ddlOthPermResCntry` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}ddlOthPermResCntry` }],
+          fieldType: 'select',
+        });
+        return block;
+      }));
+
+
+      return dynamic;
+    })(),
     travelInfo: (() => {
       if (!clientData['travelInfo'] || clientData['travelInfo'].length === 0) {
         return [];
@@ -1020,6 +1181,155 @@ function getFieldMappings(section, clientData) {
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbZIPCode` },
         fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbZIPCode` }],
         fieldType: 'text',
+
+      });
+
+      //company
+      dynamic.push({
+        dbPath: `companyName`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayingCompany` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayingCompany` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyPhone`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerPhone` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerPhone` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyRelation`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxCompanyRelation` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxCompanyRelation` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyStreetAddress1`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress1` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress1` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyStreetAddress2`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress2` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress2` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyCity`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerCity` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerCity` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyCountry`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlPayerCountry` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlPayerCountry` }],
+        fieldType: 'select',
+
+      });
+      // dynamic.push({
+      //   dbPath: `companyAddress`,
+      //   selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbZIPCode` },
+      //   fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbZIPCode` }],
+      //   fieldType: 'text',
+
+      // });
+      dynamic.push({
+        dbPath: `sponsoringMission`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrg` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxMissionOrg` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `contactSurname`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrgContactSurname` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxMissionOrgContactSurname` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `contactGivenName`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrgContactGivenName` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxMissionOrgContactGivenName` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `missionAddressLine1`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrgAddress1` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxMissionOrgAddress1` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `missionAddressLine2`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrgAddress2` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxMissionOrgAddress2` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `missionCity`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrgCity` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxMissionOrgCity` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `missionState`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlMissionOrgState` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlMissionOrgState` }],
+        fieldType: 'select',
+
+      });
+      dynamic.push({
+        dbPath: `missionZipCode`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrgZipCode` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxMissionOrgZipCode` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `missionPhoneNumber`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrgTel` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxMissionOrgTel` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyStateProvince`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStateProvince` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStateProvince` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyPostalZIPCode`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerPostalZIPCode` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerPostalZIPCode` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyStateProvince_na`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$cbxDNAPayerStateProvince` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_cbxDNAPayerStateProvince` }],
+        fieldType: 'checkbox',
+
+      });
+      dynamic.push({
+        dbPath: `companyPostalZIPCode_na`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$cbxDNAPayerPostalZIPCode` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_cbxDNAPayerPostalZIPCode` }],
+        fieldType: 'checkbox',
 
       });
 
@@ -1407,7 +1717,7 @@ function getFieldMappings(section, clientData) {
           { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxPPT_NUM' }
         ],
         fieldType: 'text',
-        action:"wait"
+        action: "wait"
       },
       {
         dbPath: 'passportBookNumber_na',
@@ -1614,7 +1924,7 @@ function getFieldMappings(section, clientData) {
         dbPath: 'fatherInUs',
         selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblFATHER_LIVE_IN_US_IND' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblFATHER_LIVE_IN_US_IND_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblFATHER_LIVE_IN_US_IND_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblFATHER_LIVE_IN_US_IND_1' }],
         fieldType: 'radio',
         valueMap: { 'Y': '0', 'N': '1' }
@@ -1694,65 +2004,65 @@ function getFieldMappings(section, clientData) {
 
     // ─── Family: Spouse ───────────────────────────────────────────────────────
     familySpouse: [
-      { 
-        dbPath: 'spouseSurname', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxSpouseSurname' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxSpouseSurname' }], 
-        fieldType: 'text' 
+      {
+        dbPath: 'spouseSurname',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxSpouseSurname' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxSpouseSurname' }],
+        fieldType: 'text'
       },
       {
-        dbPath: 'spouseGivenName', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxSpouseGivenName' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxSpouseGivenName' }], 
-        fieldType: 'text' 
+        dbPath: 'spouseGivenName',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxSpouseGivenName' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxSpouseGivenName' }],
+        fieldType: 'text'
       },
-      { 
-        dbPath: 'spouseDob.day', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBDay' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBDay' }], 
-        fieldType: 'select' 
+      {
+        dbPath: 'spouseDob.day',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBDay' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBDay' }],
+        fieldType: 'select'
       },
-      { 
-        dbPath: 'spouseDob.month', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBMonth' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBMonth' }], 
-        fieldType: 'select' 
+      {
+        dbPath: 'spouseDob.month',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlDOBMonth' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlDOBMonth' }],
+        fieldType: 'select'
       },
-      { 
-        dbPath: 'spouseDob.year', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxDOBYear' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxDOBYear' }], 
-        fieldType: 'text' 
+      {
+        dbPath: 'spouseDob.year',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxDOBYear' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxDOBYear' }],
+        fieldType: 'text'
       },
-      { 
-        dbPath: 'spouseDob_na', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexDOBNA' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexDOBNA' }], 
-        fieldType: 'checkbox', valueExtractor: v => v === undefined ? false : v 
+      {
+        dbPath: 'spouseDob_na',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbexDOBNA' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbexDOBNA' }],
+        fieldType: 'checkbox', valueExtractor: v => v === undefined ? false : v
       },
-      { 
-        dbPath: 'spouseNationality', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlSpouseNatDropDownList' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlSpouseNatDropDownList' }], 
-        fieldType: 'select' 
+      {
+        dbPath: 'spouseNationality',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlSpouseNatDropDownList' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlSpouseNatDropDownList' }],
+        fieldType: 'select'
       },
-      { 
-        dbPath: 'spousePobCity', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxSpousePOBCity' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxSpousePOBCity' }], 
-        fieldType: 'text' 
+      {
+        dbPath: 'spousePobCity',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxSpousePOBCity' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxSpousePOBCity' }],
+        fieldType: 'text'
       },
-      { 
-        dbPath: 'spousePobCountry', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlSpousePOBCountry' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlSpousePOBCountry' }], 
-        fieldType: 'select' 
+      {
+        dbPath: 'spousePobCountry',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlSpousePOBCountry' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlSpousePOBCountry' }],
+        fieldType: 'select'
       },
-      { 
-        dbPath: 'spouseAddressType', 
-        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlSpouseAddressType' }, 
-        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlSpouseAddressType' }], 
-        fieldType: 'select' 
+      {
+        dbPath: 'spouseAddressType',
+        selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_ddlSpouseAddressType' },
+        fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlSpouseAddressType' }],
+        fieldType: 'select'
       }
     ],
     workEducation: [
@@ -1860,7 +2170,7 @@ function getFieldMappings(section, clientData) {
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxCURR_MONTHLY_SALARY' }
         ],
         fieldType: 'text',
-      }, 
+      },
       {
         dbPath: 'jobDuties',
         selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxDescribeDuties' },
@@ -1902,7 +2212,12 @@ function getFieldMappings(section, clientData) {
         const baseName = `ctl00$SiteContentPlaceHolder$FormView1$dtlLANGUAGES$ctl0${idx}$`;
         const baseId = baseName.replace(/\$/g, '_');
         const block = [];
-        if (idx > 0) block.push({ action: 'addAnotherRow' });
+        if (idx > 0) block.push({
+          dbPath: `languages.${idx}.languageName`,
+          selector: { type: 'name', value: `${baseName}tbxLANGUAGE_NAME` },
+          fallbackSelectors: [{ type: 'id', value: `${baseId}tbxLANGUAGE_NAME` }],
+          fieldType: 'text', action: 'addAnotherRow'
+        });
         block.push({
           dbPath: `languages.${idx}.languageName`,
           selector: { type: 'name', value: `${baseName}tbxLANGUAGE_NAME` },
@@ -1977,247 +2292,264 @@ function getFieldMappings(section, clientData) {
     })(),
     // ─── Security & Background: Part 1 ─────────────────────────────────────
     securityBackground: [
-      { 
-        dbPath: 'hasDisease', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblDisease' }, 
+      {
+        dbPath: 'hasDisease',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblDisease' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDisease_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDisease_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDisease_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { 
-        dbPath: 'hasDisorder', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblDisorder' }, 
+      {
+        dbPath: 'hasDisorder',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblDisorder' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDisorder_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDisorder_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDisorder_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { 
-        dbPath: 'isDrugUser', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblDruguser' }, 
+      {
+        dbPath: 'isDrugUser',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblDruguser' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDruguser_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDruguser_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDruguser_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       }
     ],
     // ─── Security & Background: Part 2 ─────────────────────────────────────
     securityBackground2: [
-      { 
-        dbPath: 'hasArrest', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblArrested' }, 
+      {
+        dbPath: 'hasArrest',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblArrested' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblArrested_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblArrested_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblArrested_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { 
-        dbPath: 'hasControlledSubstances', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblControlledSubstances' }, 
+      {
+        dbPath: 'hasControlledSubstances',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblControlledSubstances' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblControlledSubstances_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblControlledSubstances_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblControlledSubstances_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { 
-        dbPath: 'hasProstitution', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblProstitution' }, 
+      {
+        dbPath: 'hasProstitution',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblProstitution' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblProstitution_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblProstitution_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblProstitution_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { 
-        dbPath: 'hasMoneyLaundering', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblMoneyLaundering' }, 
+      {
+        dbPath: 'hasMoneyLaundering',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblMoneyLaundering' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblMoneyLaundering_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblMoneyLaundering_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblMoneyLaundering_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { 
-        dbPath: 'hasHumanTrafficking', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblHumanTrafficking' }, 
+      {
+        dbPath: 'hasHumanTrafficking',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblHumanTrafficking' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblHumanTrafficking_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblHumanTrafficking_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblHumanTrafficking_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { 
-        dbPath: 'hasAssistedTrafficking', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblAssistedSevereTrafficking' }, 
+      {
+        dbPath: 'hasAssistedTrafficking',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblAssistedSevereTrafficking' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblAssistedSevereTrafficking_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblAssistedSevereTrafficking_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblAssistedSevereTrafficking_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { 
-        dbPath: 'hasTraffickingRelated', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblHumanTraffickingRelated' }, 
+      {
+        dbPath: 'hasTraffickingRelated',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblHumanTraffickingRelated' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblHumanTraffickingRelated_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblHumanTraffickingRelated_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblHumanTraffickingRelated_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       }
     ],
     // ─── Security & Background: Part 3 ─────────────────────────────────────
     securityBackground3: [
-      { dbPath: 'hasIllegalActivity', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblIllegalActivity' }, 
+      {
+        dbPath: 'hasIllegalActivity',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblIllegalActivity' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblIllegalActivity_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblIllegalActivity_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblIllegalActivity_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasTerroristActivity', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTerroristActivity' }, 
+      {
+        dbPath: 'hasTerroristActivity',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTerroristActivity' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristActivity_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristActivity_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristActivity_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasTerroristSupport', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTerroristSupport' }, 
+      {
+        dbPath: 'hasTerroristSupport',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTerroristSupport' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristSupport_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristSupport_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristSupport_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasTerroristOrg', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTerroristOrg' }, 
+      {
+        dbPath: 'hasTerroristOrg',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTerroristOrg' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristOrg_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristOrg_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristOrg_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasTerroristRel', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTerroristRel' }, 
+      {
+        dbPath: 'hasTerroristRel',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTerroristRel' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristRel_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristRel_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTerroristRel_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasGenocide', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblGenocide' }, 
+      {
+        dbPath: 'hasGenocide',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblGenocide' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblGenocide_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblGenocide_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblGenocide_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasTorture', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTorture' }, 
+      {
+        dbPath: 'hasTorture',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTorture' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTorture_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTorture_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTorture_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasExViolence', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblExViolence' }, 
+      {
+        dbPath: 'hasExViolence',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblExViolence' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblExViolence_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblExViolence_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblExViolence_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasChildSoldier', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblChildSoldier' }, 
+      {
+        dbPath: 'hasChildSoldier',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblChildSoldier' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblChildSoldier_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblChildSoldier_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblChildSoldier_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasReligiousFreedom', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblReligiousFreedom' }, 
+      {
+        dbPath: 'hasReligiousFreedom',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblReligiousFreedom' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblReligiousFreedom_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblReligiousFreedom_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblReligiousFreedom_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasPopulationControls', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblPopulationControls' }, 
+      {
+        dbPath: 'hasPopulationControls',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblPopulationControls' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblPopulationControls_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblPopulationControls_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblPopulationControls_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasTransplant', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTransplant' }, 
+      {
+        dbPath: 'hasTransplant',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblTransplant' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTransplant_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTransplant_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblTransplant_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       }
     ],
     // ─── Security & Background: Part 4 ─────────────────────────────────────
     securityBackground4: [
-      { dbPath: 'hasImmigrationFraud', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblImmigrationFraud' }, 
+      {
+        dbPath: 'hasImmigrationFraud',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblImmigrationFraud' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblImmigrationFraud_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblImmigrationFraud_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblImmigrationFraud_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasDeportation', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblDeport' }, 
+      {
+        dbPath: 'hasDeportation',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblDeport' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDeport_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDeport_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblDeport_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       }
     ],
     // ─── Security & Background: Part 5 ─────────────────────────────────────
     securityBackground5: [
-      { dbPath: 'hasChildCustody', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblChildCustody' }, 
+      {
+        dbPath: 'hasChildCustody',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblChildCustody' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblChildCustody_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblChildCustody_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblChildCustody_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasVotingViolation', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblVotingViolation' }, 
+      {
+        dbPath: 'hasVotingViolation',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblVotingViolation' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblVotingViolation_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblVotingViolation_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblVotingViolation_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       },
-      { dbPath: 'hasRenounced', 
-        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblRenounceExp' }, 
+      {
+        dbPath: 'hasRenounced',
+        selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$rblRenounceExp' },
         fallbackSelectors: [
-          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblRenounceExp_0' }, 
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblRenounceExp_0' },
           { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblRenounceExp_1' }
-        ], 
-        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' } 
+        ],
+        fieldType: 'radio', valueMap: { 'Y': '0', 'N': '1' }
       }
     ],
 
   };
-
+  console.log(mappings[section]);
   return mappings[section] || [];
 }
