@@ -250,15 +250,18 @@ async function fillField(field, value, mapping) {
     await addAnotherField(field.parentNode.parentNode.parentNode, mapping.id, mapping);
     await delay(200);
   }
+  if(field.value === value && mapping.fieldType!='radio'){
+    console.log("field.value === value", field.value, value);
+    return true;
+  }
+  if (mapping.action === 'wait') {
+    await delay(500);
+    field = findField(mapping);
+  }
   try {
     const fieldType = mapping.fieldType || detectFieldType(field);
-
     switch (fieldType) {
       case 'text':
-        if (mapping.action === 'wait') {
-          await delay(500);
-          field = findField(mapping);
-        }
         field.focus();
         field.value = value;
         field.dispatchEvent(new Event('input', { bubbles: true }));
@@ -280,11 +283,16 @@ async function fillField(field, value, mapping) {
         break;
 
       case 'checkbox':
-        do {
+       if(Boolean(value) == field.checked){
+        break;
+       }
+       console.log("filling checkbox: ", value);
+       console.log("field.checked: ", field.checked);
+       do{
           field.focus();
           field.click();
-          await delay(300); // Ensures onclick is fired
-        } while (Boolean(value) !== field.checked);
+          await delay(1000); // Ensures onclick is fired
+        } while (Boolean(value) !=Boolean(field.checked));
         break;
 
       case 'date':
@@ -1471,17 +1479,18 @@ function getFieldMappings(section, clientData) {
             fieldType: 'text',
           });
           block.push({
-            dbPath: `previousTrips.${index}.stayUnit`,
-            selector: { type: 'name', value: `${baseName}ddlPREV_US_VISIT_LOS_CD` },
-            fallbackSelectors: [{ type: 'id', value: `${baseId}ddlPREV_US_VISIT_LOS_CD` }],
-            fieldType: 'select',
-          });
-          block.push({
             dbPath: `previousTrips.${index}.stayDuration`,
             selector: { type: 'name', value: `${baseName}tbxPREV_US_VISIT_LOS` },
             fallbackSelectors: [{ type: 'id', value: `${baseId}tbxPREV_US_VISIT_LOS` }],
             fieldType: 'text',
           });
+          block.push({
+            dbPath: `previousTrips.${index}.stayUnit`,
+            selector: { type: 'name', value: `${baseName}ddlPREV_US_VISIT_LOS_CD` },
+            fallbackSelectors: [{ type: 'id', value: `${baseId}ddlPREV_US_VISIT_LOS_CD` }],
+            fieldType: 'select',
+          });
+          
           return block;
         }))
         dynamic.push({
@@ -2124,6 +2133,14 @@ function getFieldMappings(section, clientData) {
           selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxPPT_ISSUED_IN_CITY' },
           fallbackSelectors: [
             { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxPPT_ISSUED_IN_CITY' }
+          ],
+          fieldType: 'text'
+        },
+        {
+          dbPath: 'passportIssuedState',
+          selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxPPT_ISSUED_IN_STATE' },
+          fallbackSelectors: [
+            { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxPPT_ISSUED_IN_STATE' }
           ],
           fieldType: 'text'
         },
