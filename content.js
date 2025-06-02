@@ -250,7 +250,7 @@ async function fillField(field, value, mapping) {
     await addAnotherField(field.parentNode.parentNode.parentNode, mapping.id, mapping);
     await delay(200);
   }
-  if(field.value === value && mapping.fieldType!='radio'){
+  if (field.value === value && mapping.fieldType != 'radio') {
     console.log("field.value === value", field.value, value);
     return true;
   }
@@ -283,16 +283,16 @@ async function fillField(field, value, mapping) {
         break;
 
       case 'checkbox':
-       if(Boolean(value) == field.checked){
-        break;
-       }
-       console.log("filling checkbox: ", value);
-       console.log("field.checked: ", field.checked);
-       do{
+        if (Boolean(value) == field.checked) {
+          break;
+        }
+        console.log("filling checkbox: ", value);
+        console.log("field.checked: ", field.checked);
+        do {
           field.focus();
           field.click();
           await delay(1000); // Ensures onclick is fired
-        } while (Boolean(value) !=Boolean(field.checked));
+        } while (Boolean(value) != Boolean(field.checked));
         break;
 
       case 'date':
@@ -1109,43 +1109,126 @@ function getFieldMappings(section, clientData) {
         valueMap: {
           'Y': '0',
           'N': '1'
-        }
+        },
+        action: 'wait'
       });
-      dynamic.push({
-        dbPath: `intendedDateOfArrival.day`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlTRAVEL_DTEDay` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_DTEDay` }],
-        fieldType: 'select',
+      if (clientData['travelInfo']['hasSpecificPlans'] == 'N') {
+        dynamic.push({
+          dbPath: `intendedDateOfArrival.day`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlTRAVEL_DTEDay` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_DTEDay` }],
+          fieldType: 'select',
 
-      });
-      dynamic.push({
-        dbPath: `intendedDateOfArrival.month`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlTRAVEL_DTEMonth` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_DTEMonth` }],
-        fieldType: 'select',
+        });
+        dynamic.push({
+          dbPath: `intendedDateOfArrival.month`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlTRAVEL_DTEMonth` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_DTEMonth` }],
+          fieldType: 'select',
 
-      });
-      dynamic.push({
-        dbPath: `intendedDateOfArrival.year`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxTRAVEL_DTEYear` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxTRAVEL_DTEYear` }],
-        fieldType: 'text',
+        });
+        dynamic.push({
+          dbPath: `intendedDateOfArrival.year`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxTRAVEL_DTEYear` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxTRAVEL_DTEYear` }],
+          fieldType: 'text',
 
-      });
-      dynamic.push({
-        dbPath: `stayDuration`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxTRAVEL_LOS` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxTRAVEL_LOS` }],
-        fieldType: 'text',
+        });
+        dynamic.push({
+          dbPath: `stayDuration`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxTRAVEL_LOS` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxTRAVEL_LOS` }],
+          fieldType: 'text',
 
-      });
-      dynamic.push({
-        dbPath: `stayDurationType`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlTRAVEL_LOS_CD` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_LOS_CD` }],
-        fieldType: 'select',
+        });
+        dynamic.push({
+          dbPath: `stayDurationType`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlTRAVEL_LOS_CD` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_LOS_CD` }],
+          fieldType: 'select',
 
-      });
+        });
+        
+      } else {
+        dynamic.push({
+          dbPath: `arrivalUSDate.day`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlARRIVAL_US_DTEDay` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlARRIVAL_US_DTEDay` }],
+          fieldType: 'select',
+
+        });
+        dynamic.push({
+          dbPath: `arrivalUSDate.month`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlARRIVAL_US_DTEMonth` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlARRIVAL_US_DTEMonth` }],
+          fieldType: 'select',
+
+        });
+        dynamic.push({
+          dbPath: `arrivalUSDate.year`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxARRIVAL_US_DTEYear` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxARRIVAL_US_DTEYear` }],
+          fieldType: 'text',
+
+        });
+        dynamic.push({
+          dbPath: `arrivalCity`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxArriveCity` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxArriveCity` }],
+          fieldType: 'text',
+
+        });
+        dynamic.push({
+          dbPath: `departureUSDate.day`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlDEPARTURE_US_DTEDay` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlDEPARTURE_US_DTEDay` }],
+          fieldType: 'select',
+
+        });
+        dynamic.push({
+          dbPath: `departureUSDate.month`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlDEPARTURE_US_DTEMonth` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlDEPARTURE_US_DTEMonth` }],
+          fieldType: 'select',
+
+        });
+        dynamic.push({
+          dbPath: `departureUSDate.year`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxDEPARTURE_US_DTEYear` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxDepartURE_US_DTEYear` }],
+          fieldType: 'text',
+
+        });
+        dynamic.push({
+          dbPath: `departureCity`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxDepartCity` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxDepartCity` }],
+          fieldType: 'text',
+
+        });
+        dynamic.push(...arr.flatMap((entry, idx) => {
+          const baseName = `ctl00$SiteContentPlaceHolder$FormView1$dtlTravelLoc$ctl0${idx}$`;
+          const baseId = baseName.replace(/\$/g, '_');
+          const block = [];
+          if (idx > 0) block.push({ action: 'addAnotherRow' });
+          block.push({
+            dbPath: `visitLocations.${idx}.location`,
+            selector: { type: 'name', value: `${baseName}tbxSPECTRAVEL_LOCATION` },
+            fallbackSelectors: [{ type: 'id', value: `${baseId}tbxSPECTRAVEL_LOCATION` }],
+            fieldType: 'text',
+  
+          });
+          block.push({
+            dbPath: `visitLocations.${idx}.location`,
+            selector: { type: 'name', value: `${baseName}tbxSPECTRAVEL_LOCATION` },
+            fallbackSelectors: [{ type: 'id', value: `${baseId}tbxSPECTRAVEL_LOCATION` }],
+            fieldType: 'text',
+  
+          });
+          return block;
+        }));
+
+      }
       dynamic.push({
         dbPath: `whoIsPaying`,
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlWhoIsPaying` },
@@ -1490,7 +1573,7 @@ function getFieldMappings(section, clientData) {
             fallbackSelectors: [{ type: 'id', value: `${baseId}ddlPREV_US_VISIT_LOS_CD` }],
             fieldType: 'select',
           });
-          
+
           return block;
         }))
         dynamic.push({
@@ -2208,7 +2291,8 @@ function getFieldMappings(section, clientData) {
           fallbackSelectors: [
             { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$ddlPPT_EXPIRE_DTEDay' }
           ],
-          fieldType: 'select'
+          fieldType: 'select',
+          action: 'wait'
         },
           {
             dbPath: 'passportExpirationDate.month',
@@ -2291,14 +2375,24 @@ function getFieldMappings(section, clientData) {
           dbPath: 'usPocGivenName',
           selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxUS_POC_GIVEN_NAME' },
           fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxUS_POC_GIVEN_NAME' }],
-          fieldType: 'text'
+          fieldType: 'text',
+          action: 'wait'
         },
         {
           dbPath: 'usPocName_na',
           selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbxUS_POC_NAME_NA' },
           fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbxUS_POC_NAME_NA' }],
           fieldType: 'checkbox',
-          valueExtractor: v => v === undefined ? false : v
+          valueExtractor: v => v === undefined ? false : v,
+          action: 'wait'
+        },
+        {
+          dbPath: 'usPocNameNotKnown',
+          selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbxUS_POC_NAME_NA' },
+          fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbxUS_POC_NAME_NA' }],
+          fieldType: 'checkbox',
+          valueExtractor: v => v === undefined ? false : v,
+          action: 'wait'
         },
         {
           dbPath: 'usPocOrganization',
@@ -2309,6 +2403,13 @@ function getFieldMappings(section, clientData) {
         },
         {
           dbPath: 'usPocOrganization_na',
+          selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbxUS_POC_ORG_NA_IND' },
+          fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbxUS_POC_ORG_NA_IND' }],
+          fieldType: 'checkbox',
+          valueExtractor: v => v === undefined ? false : v
+        },
+        {
+          dbPath: 'usPocOrganizationNotKnown',
           selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_cbxUS_POC_ORG_NA_IND' },
           fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$cbxUS_POC_ORG_NA_IND' }],
           fieldType: 'checkbox',
@@ -2457,7 +2558,8 @@ function getFieldMappings(section, clientData) {
             { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblFATHER_LIVE_IN_US_IND_0' },
             { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblFATHER_LIVE_IN_US_IND_1' }],
           fieldType: 'radio',
-          valueMap: { 'Y': '0', 'N': '1' }
+          valueMap: { 'Y': '0', 'N': '1' },
+          action: 'wait'
         }
       )
       if (clientData.familyRelatives.fatherInUs == "Y") {
@@ -2489,7 +2591,8 @@ function getFieldMappings(section, clientData) {
             dbPath: 'motherSurname',
             selector: { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxMOTHER_SURNAME' },
             fallbackSelectors: [{ type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxMOTHER_SURNAME' }],
-            fieldType: 'text'
+            fieldType: 'text',
+            action: 'wait'
           }
         )
       }
