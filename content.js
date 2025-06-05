@@ -1270,6 +1270,20 @@ function getFieldMappings(section, clientData) {
         fieldType: 'text',
       });
       dynamic.push({
+        dbPath: `isSameAddress`,
+        selector: [{ type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$rblPayerAddrSameAsInd` },
+        ],
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_rblPayerAddrSameAsInd_0` },
+          { type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_rblPayerAddrSameAsInd_1` },
+        ],
+        fieldType: 'radio',
+        valueMap: {
+          'Y': '0',
+          'N': '1'
+        },
+        action: 'wait'
+      });
+      dynamic.push({
         dbPath: `streetAddress2`,
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxStreetAddress2` },
         fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxStreetAddress2` }],
