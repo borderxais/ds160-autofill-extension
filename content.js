@@ -274,12 +274,13 @@ async function fillField(field, value, mapping) {
         }
         else {
           fillSelectField(field, value);
-          await delay(100);
+          await delay(600);
         }
         break;
 
       case 'radio':
         fillRadioField(field, value, mapping);
+        await delay(2000);
         break;
 
       case 'checkbox':
@@ -309,17 +310,17 @@ async function fillField(field, value, mapping) {
         break;
 
       case 'array':
-        console.log("filling array: ", value);
         // from input to its parent table that contains all small tables of each array object
         const tableField = field.parentNode.parentNode.parentNode.parentNode.parentNode;
         const tableRows = tableField.querySelectorAll('tr');
+
         for (let i = tableRows.length - 1; i < value.length - 1; i++) {
+
           //add another field, only when value.length > 1
           await addAnotherField(field.parentNode.parentNode.parentNode.parentNode.parentNode, i, mapping);
           // wait for the new field to be added
 
         }
-
         await fillArrayField(field, value, mapping);
 
         break;
@@ -336,6 +337,7 @@ async function fillField(field, value, mapping) {
 }
 
 async function fillArrayField(field, value, mapping) {
+  console.log("filling array: ", value);
   await delay(500);
   field = findField(mapping);
   let tableField = field.parentNode.parentNode.parentNode.parentNode.parentNode;
@@ -415,11 +417,13 @@ function manualPostBack(eventTarget, eventArgument) {
  * @param {*} mapping : mapping of the first input field of first tr row
  */
 async function addAnotherField(field, idx, mapping) {
-
-  let addone_button = field.querySelectorAll(".addone")[idx];
+  console.log("Here:add another field", field);
+  let addone_button = field.querySelectorAll(".addone")[0];
+  console.log("addone_button: ", addone_button);
   let addone_link = addone_button.querySelector("a")
+  console.log("addone_link: ", addone_link);
   const currentRows = field.querySelectorAll(".addone").length;
-
+  console.log("all addones: ", field.querySelectorAll(".addone"));
   await delay(600);
   // Inject __doPostBack only if missing (safe for CSP)
   if (typeof __doPostBack === 'undefined') {
@@ -442,15 +446,19 @@ async function addAnotherField(field, idx, mapping) {
     };
   }
   fireAliasInsertButton(addone_link);
-  await delay(800);
+  await delay(1000);
+  console.log("Checkpoint 1");
 
   field = findField(mapping).parentNode.parentNode.parentNode;
   whole_table = field.parentNode.parentNode;
   await delay(300);
 
+  console.log("Checkpoint 2");
+
   console.log("whole_table: ", whole_table);
   console.log("currentRows before check: ", currentRows);
 
+  console.log("addone length: ", whole_table.querySelectorAll(".addone").length);
   if (whole_table.querySelectorAll(".addone").length <= currentRows) {
     console.log("add another field. second attempt ...", whole_table.querySelectorAll(".addone"), currentRows);
 
@@ -470,6 +478,7 @@ async function addAnotherField(field, idx, mapping) {
 
     manualPostBack(eventTarget, eventArgument);
 
+    console.log("Checkpoint 3");
     // Wait for the new row to appear
     await delay(1200);
   } else {
@@ -481,6 +490,7 @@ async function addAnotherField(field, idx, mapping) {
     console.log("add another field failed");
     return;
   }
+  
 }
 
 /**
@@ -765,6 +775,7 @@ function getFieldMappings(section, clientData) {
         fieldType: 'array',
         valueExtractor: (data) => {
           if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+            console.log('otherNames', data);
             return data.map(entry => [entry.givenName, entry.surname]);
           }
           return null;
@@ -1070,13 +1081,24 @@ function getFieldMappings(section, clientData) {
         const baseName = `ctl00$SiteContentPlaceHolder$FormView1$dlPrincipalAppTravel$ctl0${idx}$`;
         const baseId = baseName.replace(/\$/g, '_');
         const block = [];
-        if (idx > 0) block.push({ action: 'addAnotherRow' });
+        if (idx > 0) {
+          let baseName = `ctl00$SiteContentPlaceHolder$FormView1$dlPrincipalAppTravel$ctl0${idx - 1}$`;
+          let baseId = baseName.replace(/\$/g, '_');
+          block.push({
+            dbPath: `travelPurposes.${idx - 1}.visaClass`,
+            selector: { type: 'name', value: `${baseName}ddlPurposeOfTrip` },
+            fallbackSelectors: [{ type: 'id', value: `${baseId}ddlPurposeOfTrip` }],
+            fieldType: 'select',
+            action: 'addAnotherRow',
+            id: idx - 1,
+          });
+        }
         block.push({
           dbPath: `travelPurposes.${idx}.visaClass`,
           selector: { type: 'name', value: `${baseName}ddlPurposeOfTrip` },
           fallbackSelectors: [{ type: 'id', value: `${baseId}ddlPurposeOfTrip` }],
           fieldType: 'select',
-
+          action: 'wait'
         });
         block.push({
           dbPath: `travelPurposes.${idx}.specificPurpose`,
@@ -1210,7 +1232,19 @@ function getFieldMappings(section, clientData) {
           const baseName = `ctl00$SiteContentPlaceHolder$FormView1$dtlTravelLoc$ctl0${idx}$`;
           const baseId = baseName.replace(/\$/g, '_');
           const block = [];
-          if (idx > 0) block.push({ action: 'addAnotherRow' });
+          console.log("Here!!!idx: ", idx);
+          if (idx > 0) {
+            let baseName = `ctl00$SiteContentPlaceHolder$FormView1$dtlTravelLoc$ctl0${idx - 1}$`;
+            let baseId = baseName.replace(/\$/g, '_');
+            block.push({
+              dbPath: `visitLocations.${idx - 1}.location`,
+              selector: { type: 'name', value: `${baseName}tbxSPECTRAVEL_LOCATION` },
+              fallbackSelectors: [{ type: 'id', value: `${baseId}tbxSPECTRAVEL_LOCATION` }],
+              fieldType: 'text',
+              action: 'addAnotherRow',
+              id: idx - 1,
+            });
+          }
           block.push({
             dbPath: `visitLocations.${idx}.location`,
             selector: { type: 'name', value: `${baseName}tbxSPECTRAVEL_LOCATION` },
@@ -1230,160 +1264,35 @@ function getFieldMappings(section, clientData) {
 
       }
       dynamic.push({
-        dbPath: `whoIsPaying`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlWhoIsPaying` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlWhoIsPaying` }],
-        fieldType: 'select',
-
-      });
-      dynamic.push({
-        dbPath: `payerSurname`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerSurname` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerSurname` }],
-        fieldType: 'text',
-        action: 'wait'
-
-      });
-      dynamic.push({
-        dbPath: `payerGivenName`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerGivenName` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerGivenName` }],
-        fieldType: 'text',
-        action: 'wait'
-
-      });
-      dynamic.push({
-        dbPath: `payerPhone`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerPhone` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerPhone` }],
-        fieldType: 'text',
-      });
-      dynamic.push({
-        dbPath: `payerEmail`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPAYER_EMAIL_ADDR` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPAYER_EMAIL_ADDR` }],
-        fieldType: 'text',
-      });
-      dynamic.push({
-        dbPath: `payerEmail_na`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$cbxDNAPAYER_EMAIL_ADDR_NA` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_cbxDNAPAYER_EMAIL_ADDR_NA` }],
-        fieldType: 'checkbox',
-        valueExtractor: value => value === undefined ? false : value
-      });
-      dynamic.push({
-        dbPath: `payerRelationship`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlPayerRelationship` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlPayerRelationship` }],
-        fieldType: 'select',
-      });
-      dynamic.push({
         dbPath: `streetAddress1`,
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxStreetAddress1` },
         fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxStreetAddress1` }],
         fieldType: 'text',
       });
       dynamic.push({
-        dbPath: `isSameAddress`,
-        selector: [{ type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$rblPayerAddrSameAsInd_1` },
-          { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$rblPayerAddrSameAsInd_0` },
-        ],
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_rblPayerAddrSameAsInd_1` },
-          { type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_rblPayerAddrSameAsInd_0` },
-        ],
-        fieldType: 'radio',
-        valueMap: {
-          'Y': '0',
-          'N': '1'
-        },
-        action: 'wait'
-      });
-      dynamic.push({
         dbPath: `streetAddress2`,
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxStreetAddress2` },
         fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxStreetAddress2` }],
         fieldType: 'text',
-
       });
       dynamic.push({
         dbPath: `city`,
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxCity` },
         fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxCity` }],
         fieldType: 'text',
-
       });
       dynamic.push({
         dbPath: `state`,
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlTravelState` },
         fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlTravelState` }],
         fieldType: 'select',
-
       });
       dynamic.push({
         dbPath: `zipCode`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbZIPCode` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbZIPCode` }],
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxZipCode` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxZipCode` }],
         fieldType: 'text',
-
       });
-
-      //company
-      dynamic.push({
-        dbPath: `companyName`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayingCompany` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayingCompany` }],
-        fieldType: 'text',
-
-      });
-      dynamic.push({
-        dbPath: `companyPhone`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerPhone` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerPhone` }],
-        fieldType: 'text',
-
-      });
-      dynamic.push({
-        dbPath: `companyRelation`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxCompanyRelation` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxCompanyRelation` }],
-        fieldType: 'text',
-
-      });
-      dynamic.push({
-        dbPath: `companyStreetAddress1`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress1` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress1` }],
-        fieldType: 'text',
-
-      });
-      dynamic.push({
-        dbPath: `companyStreetAddress2`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress2` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress2` }],
-        fieldType: 'text',
-
-      });
-      dynamic.push({
-        dbPath: `companyCity`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerCity` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerCity` }],
-        fieldType: 'text',
-
-      });
-      dynamic.push({
-        dbPath: `companyCountry`,
-        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlPayerCountry` },
-        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlPayerCountry` }],
-        fieldType: 'select',
-
-      });
-      // dynamic.push({
-      //   dbPath: `companyAddress`,
-      //   selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbZIPCode` },
-      //   fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbZIPCode` }],
-      //   fieldType: 'text',
-
-      // });
       dynamic.push({
         dbPath: `sponsoringMission`,
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxMissionOrg` },
@@ -1447,6 +1356,198 @@ function getFieldMappings(section, clientData) {
         fieldType: 'text',
 
       });
+      dynamic.push({
+        dbPath: `whoIsPaying`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlWhoIsPaying` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlWhoIsPaying` }],
+        fieldType: 'select',
+
+      });
+      dynamic.push({
+        dbPath: `payerSurname`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerSurname` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerSurname` }],
+        fieldType: 'text',
+        action: 'wait'
+
+      });
+      dynamic.push({
+        dbPath: `payerGivenName`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerGivenName` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerGivenName` }],
+        fieldType: 'text',
+        action: 'wait'
+
+      });
+      dynamic.push({
+        dbPath: `payerPhone`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerPhone` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerPhone` }],
+        fieldType: 'text',
+      });
+      dynamic.push({
+        dbPath: `payerEmail`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPAYER_EMAIL_ADDR` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPAYER_EMAIL_ADDR` }],
+        fieldType: 'text',
+      });
+      dynamic.push({
+        dbPath: `payerEmail_na`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$cbxDNAPAYER_EMAIL_ADDR_NA` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_cbxDNAPAYER_EMAIL_ADDR_NA` }],
+        fieldType: 'checkbox',
+        valueExtractor: value => value === undefined ? false : value
+      });
+      dynamic.push({
+        dbPath: `payerRelationship`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlPayerRelationship` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlPayerRelationship` }],
+        fieldType: 'select',
+      });
+      dynamic.push({
+        dbPath: `isSameAddress`,
+        selector: [{ type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$rblPayerAddrSameAsInd` },
+        ],
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_rblPayerAddrSameAsInd_0` },
+          { type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_rblPayerAddrSameAsInd_1` },
+        ],
+        fieldType: 'radio',
+        valueMap: {
+          'Y': '0',
+          'N': '1'
+        },
+        action: 'wait'
+      });
+      if (clientData['travelInfo']['isSameAddress'] == 'N') {
+        dynamic.push({
+          dbPath: `payerAddress1`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress1` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress1` }],
+          fieldType: 'text',
+        });
+        dynamic.push({
+          dbPath: `payerAddress2`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress2` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress2` }],
+          fieldType: 'text',
+        });
+        dynamic.push({
+          dbPath: `payerCity`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerCity` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerCity` }],
+          fieldType: 'text',
+        });
+        dynamic.push({
+          dbPath: `payerStateProvince`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStateProvince` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStateProvince` }],
+          fieldType: 'text',
+        });
+        dynamic.push({
+          dbPath: `payerStateProvince_na`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$cbxDNAPAYER_STATE_PROVINCE_NA` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_cbxDNAPAYER_STATE_PROVINCE_NA` }],
+          fieldType: 'checkbox',
+          valueExtractor: value => value === undefined ? false : value
+        });
+        dynamic.push({
+          dbPath: `payerPostalZIPCode`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerPostalZIPCode` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerPostalZIPCode` }],
+          fieldType: 'text',
+        });
+        dynamic.push({
+          dbPath: `payerPostalZIPCode_na`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$cbxDNAPAYER_POSTALZIPCODE_NA` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_cbxDNAPAYER_POSTALZIPCODE_NA` }],
+          fieldType: 'checkbox',
+          valueExtractor: value => value === undefined ? false : value
+        });
+        dynamic.push({
+          dbPath: `payerCountry`,
+          selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlPayerCountry` },
+          fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlPayerCountry` }],
+          fieldType: 'select',
+        });
+      }
+      dynamic.push({
+        dbPath: `payerAddress1`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress1` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress1` }],
+        fieldType: 'text',
+      });
+      dynamic.push({
+        dbPath: `payerAddress2`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress2` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress2` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `payerCity`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerCity` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerCity` }],
+        fieldType: 'text',
+
+      });
+      //company
+      dynamic.push({
+        dbPath: `companyName`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayingCompany` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayingCompany` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyPhone`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerPhone` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerPhone` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyRelation`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxCompanyRelation` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxCompanyRelation` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyStreetAddress1`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress1` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress1` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyStreetAddress2`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStreetAddress2` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerStreetAddress2` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyCity`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerCity` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbxPayerCity` }],
+        fieldType: 'text',
+
+      });
+      dynamic.push({
+        dbPath: `companyCountry`,
+        selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$ddlPayerCountry` },
+        fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_ddlPayerCountry` }],
+        fieldType: 'select',
+
+      });
+      // dynamic.push({
+      //   dbPath: `companyAddress`,
+      //   selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbZIPCode` },
+      //   fallbackSelectors: [{ type: 'id', value: `ctl00_SiteContentPlaceHolder_FormView1_tbZIPCode` }],
+      //   fieldType: 'text',
+
+      // });
+      
       dynamic.push({
         dbPath: `companyStateProvince`,
         selector: { type: 'name', value: `ctl00$SiteContentPlaceHolder$FormView1$tbxPayerStateProvince` },
@@ -1860,6 +1961,30 @@ function getFieldMappings(section, clientData) {
           ],
           fieldType: 'text',
           action: 'wait'
+        })
+      }
+      dynamic.push({
+        dbPath: 'legalPermanentResident',
+        selector: { type: 'name', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblPERM_RESIDENT_IND_0' },
+        fallbackSelectors: [
+          { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_rblPERM_RESIDENT_IND_0' }
+        ],
+        fieldType: 'radio',
+        valueMap: {
+          'Y': '0',
+          'N': '1'
+        }
+      });
+      if (clientData['previousTravel']['legalPermanentResident'] === 'Y') {
+        dynamic.push({
+          dbPath: 'legalPermanentResidentInfo',
+          selector: { type: 'name', value: 'ctl00$SiteContentPlaceHolder$FormView1$tbxPERM_RESIDENT_EXPL' },
+          fallbackSelectors: [
+            { type: 'id', value: 'ctl00_SiteContentPlaceHolder_FormView1_tbxPERM_RESIDENT_EXPL' }
+          ],
+          fieldType: 'text',
+          action: 'wait'
+          
         })
       }
       dynamic.push({
