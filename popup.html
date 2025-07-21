@@ -23,6 +23,14 @@
       border: 1px solid #ccc;
       border-radius: 4px;
     }
+    .form-select {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      flex-grow: 1;
+      width: 100%;
+      background-color: white;
+    }
     button {
       padding: 10px;
       background-color: #0078d4;
@@ -65,6 +73,23 @@
       margin-bottom: 5px;
       font-weight: bold;
     }
+    .select-container {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .icon-button {
+      padding: 5px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .form-help {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -88,8 +113,16 @@
     <div id="mainContainer" style="display: none;">
       <h2>DS-160 Autofill Helper</h2>
       <div class="form-group">
-        <label for="applicationId">Original Form Application ID:</label>
-        <input type="text" id="applicationId" placeholder="Enter the original DS-160 form ID">
+        <label for="applicationId">Select Form Application ID:</label>
+        <div class="select-container">
+          <select id="applicationId" class="form-select">
+            <option value="">-- Select a form ID --</option>
+          </select>
+          <button id="refreshFormsBtn" title="Refresh form list" class="icon-button">
+            🔄
+          </button>
+        </div>
+        <div class="form-help">Select from your recent submissions or enter ID manually</div>
       </div>
       <div class="button-group">
         <button id="loadDataBtn">Load Form Data</button>

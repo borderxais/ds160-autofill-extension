@@ -9,10 +9,71 @@ document.addEventListener('DOMContentLoaded', function() {
     const logoutBtn = document.getElementById('logoutBtn');
     
     // Get main DOM elements
-    const applicationIdInput = document.getElementById('applicationId');
+    const applicationIdSelect = document.getElementById('applicationId');
+    const refreshFormsBtn = document.getElementById('refreshFormsBtn');
     const loadDataBtn = document.getElementById('loadDataBtn');
     const fillFormBtn = document.getElementById('fillFormBtn');
     const statusMessage = document.getElementById('statusMessage');
+    
+    // Function to load form IDs into the dropdown
+    function loadFormIds() {
+      // Show loading in the dropdown
+      applicationIdSelect.innerHTML = '<option value="">Loading forms...</option>';
+      
+      // Fetch forms from the API
+      window.borderXClient.getUserForms()
+        .then(forms => {
+          // Clear the dropdown
+          applicationIdSelect.innerHTML = '<option value="">-- Select a form ID --</option>';
+          
+          if (forms && forms.length > 0) {
+            // Add each form to the dropdown
+            forms.forEach(form => {
+              const option = document.createElement('option');
+              option.value = form.application_id;
+              option.textContent = form.application_id;
+              applicationIdSelect.appendChild(option);
+            });
+            
+            // Load the last used application ID if available
+            chrome.storage.local.get('lastApplicationId', function(result) {
+              if (result.lastApplicationId) {
+                // Try to select the last used ID in the dropdown
+                for (let i = 0; i < applicationIdSelect.options.length; i++) {
+                  if (applicationIdSelect.options[i].value === result.lastApplicationId) {
+                    applicationIdSelect.selectedIndex = i;
+                    break;
+                  }
+                }
+              }
+            });
+          } else {
+            // No forms found
+            const option = document.createElement('option');
+            option.value = "";
+            option.textContent = "No forms found";
+            applicationIdSelect.appendChild(option);
+          }
+        })
+        .catch(error => {
+          console.error('Error loading forms:', error);
+          applicationIdSelect.innerHTML = '<option value="">Error loading forms</option>';
+          
+          // If it's an auth error, redirect to login
+          if (error.message && error.message.includes('session has expired')) {
+            chrome.storage.local.remove(['authToken', 'userInfo'], function() {
+              loginContainer.style.display = 'block';
+              mainContainer.style.display = 'none';
+            });
+          }
+        });
+    }
+    
+    // Add event listener for refresh button
+    refreshFormsBtn.addEventListener('click', function() {
+      loadFormIds();
+      showStatus('Form list refreshed', 'success');
+    });
     
     // Check if user is already logged in
     chrome.storage.local.get('authToken', function(result) {
@@ -21,12 +82,8 @@ document.addEventListener('DOMContentLoaded', function() {
         loginContainer.style.display = 'none';
         mainContainer.style.display = 'block';
         
-        // Load application ID if previously used
-        chrome.storage.local.get('lastApplicationId', function(result) {
-          if (result.lastApplicationId) {
-            applicationIdInput.value = result.lastApplicationId;
-          }
-        });
+        // Load form IDs into the dropdown
+        loadFormIds();
       } else {
         // User is not logged in, show login container
         loginContainer.style.display = 'block';
@@ -125,10 +182,10 @@ document.addEventListener('DOMContentLoaded', function() {
         loginContainer.style.display = 'block';
         mainContainer.style.display = 'none';
         
-        // Clear inputs
+        // Clear form fields
         emailInput.value = '';
         passwordInput.value = '';
-        applicationIdInput.value = '';
+        applicationIdSelect.innerHTML = '<option value="">-- Select a form ID --</option>';
         
         showLoginStatus('Logged out successfully', 'success');
       });
@@ -136,10 +193,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle load data button click
     loadDataBtn.addEventListener('click', function() {
-      const applicationId = applicationIdInput.value.trim();
+      const applicationId = applicationIdSelect.value;
       
       if (!applicationId) {
-        showStatus('Please enter an application ID', 'error');
+        showStatus('Please select an application ID', 'error');
         return;
       }
       

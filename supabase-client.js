@@ -4,8 +4,8 @@
 // const API_BASE_URL = 'http://localhost:5000/api';
 
 // For production
-const API_BASE_URL = 'https://visasupport-dot-overseabiz-453023.wl.r.appspot.com/api';
-
+// const API_BASE_URL = 'https://visasupport-dot-overseabiz-453023.wl.r.appspot.com/api';
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
 /**
  * BorderXClient class for handling authentication and data operations
  */
@@ -148,20 +148,29 @@ class BorderXClient {
         throw new Error('Not authenticated');
       }
       
-      const response = await fetch(`${API_BASE_URL}/ds160/form`, {
+      const response = await fetch(`${API_BASE_URL}/ds160/client/all`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
           'Content-Type': 'application/json'
         }
       });
-      
+      console.log('User forms response:', response);
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch user forms');
+        console.error('API Error Status:', response.status);
+        try {
+          const errorData = await response.json();
+          console.error('API Error Response:', errorData);
+          throw new Error(errorData.error || 'Failed to fetch user forms');
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          throw new Error(`API Error (${response.status}): ${response.statusText}`);
+        }
       }
       
-      return response.json();
+      const data = await response.json();
+      console.log('Received form data:', data);
+      return data;
     } catch (error) {
       throw error;
     }
